@@ -67,10 +67,10 @@ body {
 .node-header:active { cursor: grabbing; }
 
 .lang-badge {
-  font-size: 10px; font-weight: 500; font-family: monospace;
+  font-size: 10px; font-weight: 600; font-family: monospace;
   letter-spacing: 0.5px; text-transform: uppercase;
-  padding: 2px 6px; border-radius: 3px;
-  background: transparent; color: #484f58; border: 1px solid #30363d;
+  padding: 2px 7px; border-radius: 3px;
+  background: rgba(110,118,129,0.2); color: #8b949e; border: 1px solid #484f58;
   white-space: nowrap; flex-shrink: 0;
 }
 
@@ -102,10 +102,17 @@ body {
 .node-title {
   font-size: 13px; font-weight: 700; color: #e6edf3;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: rgba(56,139,253,0.15);
+  border-left: 3px solid #388bfd;
+  padding: 1px 6px;
+  border-radius: 2px;
 }
 .node-filepath {
-  font-size: 11px; color: #8b949e; font-family: monospace;
+  font-size: 11px; color: #79c0ff; font-family: monospace;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: rgba(121,192,255,0.08);
+  padding: 1px 6px;
+  border-radius: 2px;
 }
 
 .meta-inputs {
@@ -133,7 +140,7 @@ body {
 
 .node-body pre {
   margin: 0; padding: 14px 16px;
-  font-size: 12.5px; line-height: 1.65;
+  font-size: 12.5px; line-height: 1.0;
   white-space: pre-wrap; word-break: break-word;
   user-select: text;
 }
@@ -246,6 +253,15 @@ body.link-mode .node:hover {
   border-color: #3fb950 !important;
   box-shadow: 0 0 0 3px rgba(63,185,80,0.22) !important;
 }
+
+/* ── Mode indicator ── */
+#mode-indicator {
+  font-size: 11px; color: #6e7681;
+  padding: 2px 8px; border-radius: 4px;
+  border: 1px solid #30363d;
+  background: #21262d;
+  font-family: monospace; letter-spacing: 0.5px;
+}
 </style>
 </head>
 <body>
@@ -260,7 +276,8 @@ body.link-mode .node:hover {
   <label class="tb-btn" id="btn-import-label" style="cursor:pointer;">↑ インポート<input type="file" id="btn-import" accept=".json" style="display:none;"></label>
   <button class="tb-btn danger" id="btn-clear">🗑 クリア</button>
   <div class="sep"></div>
-  <span class="hint">ダブルクリック: ブロック追加 &nbsp;|&nbsp; スクロール: ズーム &nbsp;|&nbsp; Space+ドラッグ / 中ボタン: 移動 &nbsp;|&nbsp; テキスト選択 → リンク</span>
+  <span id="mode-indicator">SELECT</span>
+  <span class="hint">v: 選択 &nbsp;|&nbsp; h: ハンド &nbsp;|&nbsp; Ctrl/Cmd+ドラッグ: ズーム &nbsp;|&nbsp; ダブルクリック: ブロック追加 &nbsp;|&nbsp; テキスト選択 → リンク</span>
 </div>
 
 <div id="wrap">
@@ -294,7 +311,9 @@ const S = {
   drag: null,       // { id, sx, sy, ox, oy }
   resize: null,     // { id, sx, sy, ow, oh }
   pan: null,        // { sx, sy }
+  zoomDrag: null,   // { lastY, cx, cy }
   spaceDown: false,
+  mode: 'select',   // 'select' | 'hand'
   linkMode: false,
   pending: null,    // { fromId, text }
 };
@@ -307,6 +326,27 @@ const canvas    = document.getElementById('canvas');
 const svgLinks  = document.getElementById('svg-links');
 const linkTip   = document.getElementById('link-tip');
 const statusEl  = document.getElementById('status');
+
+// ═══════════════════════════════════════════════════════
+// MODE
+// ═══════════════════════════════════════════════════════
+const modeIndicator = document.getElementById('mode-indicator');
+
+function updateCursor() {
+  if (S.linkMode) return;
+  if (S.mode === 'hand' || S.spaceDown) {
+    wrap.style.cursor = S.pan ? 'grabbing' : 'grab';
+  } else {
+    wrap.style.cursor = S.pan ? 'grabbing' : '';
+  }
+}
+
+function setMode(mode) {
+  S.mode = mode;
+  modeIndicator.textContent = mode === 'hand' ? 'HAND' : 'SELECT';
+  modeIndicator.style.color = mode === 'hand' ? '#58a6ff' : '#6e7681';
+  updateCursor();
+}
 
 // ═══════════════════════════════════════════════════════
 // VIEWPORT
@@ -516,6 +556,17 @@ function setupNodeEvents(n, el) {
         exitLinkMode();
       }
       e.stopPropagation();
+      return;
+    }
+
+    // Ctrl/Cmd + drag = zoom (let it bubble to wrap handler)
+    if (e.ctrlKey || e.metaKey) return;
+
+    // Hand mode + Space: pan from node too
+    if (S.mode === 'hand' || S.spaceDown) {
+      e.preventDefault();
+      S.pan = { sx: e.clientX - S.vp.x, sy: e.clientY - S.vp.y };
+      wrap.style.cursor = 'grabbing';
       return;
     }
 
@@ -763,10 +814,28 @@ wrap.addEventListener('mousedown', e => {
     if (S.editing) stopEdit();
   }
 
-  if (e.button === 1 || (e.button === 0 && S.spaceDown)) {
+  // Middle button always pans
+  if (e.button === 1) {
     e.preventDefault();
     S.pan = { sx: e.clientX - S.vp.x, sy: e.clientY - S.vp.y };
     wrap.style.cursor = 'grabbing';
+    return;
+  }
+
+  if (e.button === 0) {
+    // Ctrl/Cmd + drag = zoom
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      S.zoomDrag = { lastY: e.clientY, cx: e.clientX, cy: e.clientY };
+      wrap.style.cursor = 'ns-resize';
+      return;
+    }
+    // Hand mode or Space held: drag pans
+    if ((S.mode === 'hand' || S.spaceDown) && onBg) {
+      e.preventDefault();
+      S.pan = { sx: e.clientX - S.vp.x, sy: e.clientY - S.vp.y };
+      wrap.style.cursor = 'grabbing';
+    }
   }
 });
 
@@ -782,6 +851,13 @@ document.addEventListener('mousemove', e => {
     S.vp.x = e.clientX - S.pan.sx;
     S.vp.y = e.clientY - S.pan.sy;
     applyVP();
+  } else if (S.zoomDrag) {
+    const dy = e.clientY - S.zoomDrag.lastY;
+    if (dy !== 0) {
+      const factor = Math.pow(dy > 0 ? 0.97 : 1.03, Math.abs(dy));
+      zoom(factor, S.zoomDrag.cx, S.zoomDrag.cy);
+    }
+    S.zoomDrag.lastY = e.clientY;
   } else if (S.drag) {
     const r = 1 / S.vp.scale;
     const n = S.nodes.find(n => n.id === S.drag.id);
@@ -812,22 +888,38 @@ document.addEventListener('mousemove', e => {
 
 document.addEventListener('mouseup', () => {
   if (S.drag) ndEl(S.drag.id)?.classList.remove('dragging');
-  S.drag = null; S.resize = null;
-  if (S.pan) { S.pan = null; wrap.style.cursor = ''; }
+  S.drag = null; S.resize = null; S.zoomDrag = null;
+  if (S.pan) S.pan = null;
+  updateCursor();
 });
 
 wrap.addEventListener('wheel', e => {
   e.preventDefault();
-  const rect = wrap.getBoundingClientRect();
-  zoom(e.deltaY < 0 ? 1.1 : 0.9, e.clientX - rect.left, e.clientY - rect.top);
+  if (e.ctrlKey || e.metaKey) {
+    // Ctrl/Cmd + wheel = zoom
+    const rect = wrap.getBoundingClientRect();
+    zoom(e.deltaY < 0 ? 1.1 : 0.9, e.clientX - rect.left, e.clientY - rect.top);
+  } else {
+    // wheel = pan
+    S.vp.x -= e.deltaX;
+    S.vp.y -= e.deltaY;
+    applyVP();
+  }
 }, { passive: false });
 
 // ── Keyboard ──
 document.addEventListener('keydown', e => {
-  if (e.code === 'Space' && !S.editing) {
+  const tag = document.activeElement?.tagName;
+  const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
+
+  if (!isInput && (e.code === 'KeyV' || e.code === 'KeyH') && !e.ctrlKey && !e.metaKey) {
+    setMode(S.mode === 'hand' ? 'select' : 'hand');
+    return;
+  }
+  if (e.code === 'Space' && !S.editing && !isInput) {
     e.preventDefault();
     S.spaceDown = true;
-    if (!S.pan) wrap.style.cursor = 'grab';
+    if (!S.pan) updateCursor();
   }
   if (e.code === 'Escape') {
     if (S.linkMode) exitLinkMode();
@@ -850,7 +942,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => {
   if (e.code === 'Space') {
     S.spaceDown = false;
-    if (!S.pan) wrap.style.cursor = '';
+    if (!S.pan) updateCursor();
   }
 });
 
