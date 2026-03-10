@@ -167,6 +167,8 @@ body {
   background: #21262d; color: #c9d1d9; cursor: pointer;
 }
 .tb-btn:hover { background: #30363d; }
+.tb-btn.danger { border-color: #da3633; color: #f85149; }
+.tb-btn.danger:hover { background: #3d1f1e; }
 
 /* ── Link tooltip ── */
 #link-tip {
@@ -208,6 +210,10 @@ body.link-mode .node:hover {
   <span class="logo">∞ Code Canvas</span>
   <div class="sep"></div>
   <button class="tb-btn" id="btn-add">＋ ブロック追加</button>
+  <div class="sep"></div>
+  <button class="tb-btn" id="btn-export">↓ エクスポート</button>
+  <label class="tb-btn" id="btn-import-label" style="cursor:pointer;">↑ インポート<input type="file" id="btn-import" accept=".json" style="display:none;"></label>
+  <button class="tb-btn danger" id="btn-clear">🗑 クリア</button>
   <div class="sep"></div>
   <span class="hint">ダブルクリック: ブロック追加 &nbsp;|&nbsp; スクロール: ズーム &nbsp;|&nbsp; Space+ドラッグ / 中ボタン: 移動 &nbsp;|&nbsp; テキスト選択 → リンク</span>
 </div>
@@ -342,6 +348,7 @@ function addNode(x, y, code) {
   canvas.appendChild(el);
   setupNodeEvents(n, el);
   renderNode(n, el);
+  scheduleSave();
   return n;
 }
 
@@ -486,6 +493,7 @@ function stopEdit() {
   const n = S.nodes.find(n => n.id === id);
   if (n) renderNode(n);
   renderLinks();
+  scheduleSave();
 }
 
 function selectNode(id) {
@@ -504,6 +512,7 @@ function removeNode(id) {
   if (S.sel === id)     S.sel = null;
   if (S.editing === id) S.editing = null;
   renderLinks();
+  scheduleSave();
 }
 
 function jumpTo(id) {
@@ -525,6 +534,7 @@ function createLink(fromId, text, toId) {
   S.links.push({ id: S.lid++, fromId, text, toId });
   renderNode(S.nodes.find(n => n.id === fromId));
   renderLinks();
+  scheduleSave();
 }
 
 function removeLink(id) {
@@ -532,6 +542,7 @@ function removeLink(id) {
   S.links = S.links.filter(l => l.id !== id);
   if (lnk) renderNode(S.nodes.find(n => n.id === lnk.fromId));
   renderLinks();
+  scheduleSave();
 }
 
 function edgePoint(from, to) {
@@ -617,7 +628,7 @@ function exitLinkMode() {
 // TEXT SELECTION → LINK
 // ═══════════════════════════════════════════════════════
 document.addEventListener('mouseup', e => {
-  if (S.editing || S.linkMode) return;
+  if (S.linkMode) return;
 
   const sel  = window.getSelection();
   const text = sel?.toString().trim();
@@ -629,6 +640,9 @@ document.addEventListener('mouseup', e => {
   if (!el) { linkTip.style.display = 'none'; return; }
 
   const fromId = +el.id.replace('nd-', '');
+
+  // selection is inside the textarea of the node being edited → skip
+  if (S.editing === fromId) { linkTip.style.display = 'none'; return; }
   const range  = sel.getRangeAt(0);
   const rect   = range.getBoundingClientRect();
 
@@ -776,9 +790,129 @@ function esc(s) {
 function setStatus(msg) { statusEl.textContent = msg; }
 
 // ═══════════════════════════════════════════════════════
-// SAMPLE DATA
+// PERSISTENCE
 // ═══════════════════════════════════════════════════════
-const n1 = addNode(60, 80, `function fibonacci(n) {
+const STORAGE_KEY = 'code-canvas-v1';
+
+function saveState() {
+  const data = {
+    nodes: S.nodes.map(({ id, x, y, w, h, code, lang }) => ({ id, x, y, w, h, code, lang })),
+    links: S.links.map(({ id, fromId, text, toId }) => ({ id, fromId, text, toId })),
+    nid: S.nid,
+    lid: S.lid,
+    vp: { ...S.vp },
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    setStatus('⚠ 保存失敗: ' + e.message);
+  }
+}
+
+let saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveState, 500);
+}
+
+function loadState(data) {
+  // clear existing DOM nodes
+  S.nodes.forEach(n => ndEl(n.id)?.remove());
+  S.nodes = [];
+  S.links = [];
+  S.sel = null;
+  S.editing = null;
+  svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+
+  S.nid = data.nid ?? 1;
+  S.lid = data.lid ?? 1;
+  if (data.vp) Object.assign(S.vp, data.vp);
+
+  for (const nd of (data.nodes ?? [])) {
+    const n = { id: nd.id, x: nd.x, y: nd.y, w: nd.w, h: nd.h, code: nd.code, lang: nd.lang ?? 'text' };
+    S.nodes.push(n);
+    const el = document.createElement('div');
+    el.className = 'node';
+    el.id = 'nd-' + n.id;
+    canvas.appendChild(el);
+    setupNodeEvents(n, el);
+    renderNode(n, el);
+  }
+  S.links = data.links ?? [];
+  renderLinks();
+  applyVP();
+}
+
+function restoreFromStorage() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return false;
+  try {
+    loadState(JSON.parse(raw));
+    return true;
+  } catch (e) {
+    console.warn('復元失敗:', e);
+    return false;
+  }
+}
+
+// save on drag/resize end
+document.addEventListener('mouseup', () => {
+  if (S.drag || S.resize) scheduleSave();
+}, true);
+
+// save on pan end
+document.addEventListener('mouseup', () => {
+  if (S.pan) scheduleSave();
+}, true);
+
+// Export
+document.getElementById('btn-export').addEventListener('click', () => {
+  saveState();
+  const data = localStorage.getItem(STORAGE_KEY) ?? '{}';
+  const blob = new Blob([data], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `code-canvas-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus('エクスポートしました');
+});
+
+// Import
+document.getElementById('btn-import').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      loadState(data);
+      localStorage.setItem(STORAGE_KEY, ev.target.result);
+      setStatus('インポートしました');
+    } catch (err) {
+      alert('JSONの読み込みに失敗しました: ' + err.message);
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+// Clear
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (!confirm('キャンバスをすべてクリアしますか？')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  S.nodes.forEach(n => ndEl(n.id)?.remove());
+  S.nodes = []; S.links = []; S.nid = 1; S.lid = 1;
+  S.sel = null; S.editing = null;
+  svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+  setStatus('クリアしました');
+});
+
+// ═══════════════════════════════════════════════════════
+// INIT: restore or show sample data
+// ═══════════════════════════════════════════════════════
+if (!restoreFromStorage()) {
+  addNode(60, 80, `function fibonacci(n) {
   if (n <= 1) return n;
   return fibonacci(n - 1) + fibonacci(n - 2);
 }
@@ -792,7 +926,7 @@ function fibMemo(n, memo = {}) {
 
 console.log(fibMemo(40)); // 102334155`);
 
-const n2 = addNode(580, 50, `def merge_sort(arr):
+  addNode(580, 50, `def merge_sort(arr):
     if len(arr) <= 1:
         return arr
     mid = len(arr) // 2
@@ -809,7 +943,7 @@ def merge(left, right):
             result.append(right[j]); j += 1
     return result + left[i:] + right[j:]`);
 
-const n3 = addNode(310, 430, `SELECT
+  addNode(310, 430, `SELECT
   u.name,
   COUNT(o.id)   AS order_count,
   SUM(o.total)  AS total_spent
@@ -821,10 +955,10 @@ HAVING SUM(o.total) > 500
 ORDER BY total_spent DESC
 LIMIT 20;`);
 
-// Center the initial view
-S.vp.x = 40;
-S.vp.y = 40;
-applyVP();
+  S.vp.x = 40;
+  S.vp.y = 40;
+  applyVP();
+}
 
 setStatus('準備完了 ─ ダブルクリックでブロック追加 | テキスト選択でリンク作成 | Alt+クリックでリンク削除');
 </script>
