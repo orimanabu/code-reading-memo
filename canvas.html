@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>∞ Code Canvas</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 100vw; height: 100vh; overflow: hidden;
+  background: #0d1117;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Canvas ── */
+#wrap {
+  position: fixed; inset: 0;
+  overflow: hidden;
+  background-image: radial-gradient(circle, #21262d 1px, transparent 0);
+  background-size: 28px 28px;
+}
+
+#canvas {
+  position: absolute; top: 0; left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+#svg-links {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* ── Nodes ── */
+.node {
+  position: absolute;
+  display: flex; flex-direction: column;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+  min-width: 260px; min-height: 120px;
+  user-select: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.node.selected {
+  border-color: #388bfd;
+  box-shadow: 0 0 0 3px rgba(56,139,253,0.22), 0 8px 32px rgba(0,0,0,0.55);
+}
+.node.dragging {
+  opacity: 0.5;
+}
+
+.node-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: #1c2128;
+  border-bottom: 1px solid #30363d;
+  border-radius: 10px 10px 0 0;
+  cursor: grab; min-height: 40px;
+}
+.node-header:active { cursor: grabbing; }
+
+.lang-badge {
+  font-size: 10px; font-weight: 700; font-family: monospace;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 3px;
+  background: #1f6feb; color: #fff;
+  white-space: nowrap; flex-shrink: 0;
+}
+
+.node-actions {
+  margin-left: auto; display: flex; gap: 4px;
+  opacity: 0; transition: opacity 0.15s;
+}
+.node:hover .node-actions,
+.node.selected .node-actions { opacity: 1; }
+
+.node-btn {
+  padding: 3px 8px; font-size: 11px;
+  border-radius: 4px; border: 1px solid #30363d;
+  background: #21262d; color: #c9d1d9;
+  cursor: pointer; white-space: nowrap;
+}
+.node-btn:hover { background: #30363d; }
+.node-btn.danger { border-color: #da3633; color: #f85149; }
+.node-btn.danger:hover { background: #3d1f1e; }
+
+.node-body {
+  flex: 1; overflow: auto; position: relative;
+  border-radius: 0 0 10px 10px;
+}
+
+.node-body pre {
+  margin: 0; padding: 14px 16px;
+  font-size: 12.5px; line-height: 1.65;
+  white-space: pre-wrap; word-break: break-word;
+  user-select: text;
+}
+.node-body pre code.hljs {
+  background: transparent !important; padding: 0 !important;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  user-select: text;
+}
+
+.node-body textarea {
+  width: 100%; height: 100%; display: block;
+  background: #0d1117; color: #e6edf3;
+  border: none; outline: none;
+  padding: 14px 16px;
+  font-size: 12.5px; line-height: 1.65; tab-size: 2;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  resize: none; border-radius: 0 0 10px 10px;
+}
+
+.resize-handle {
+  position: absolute; bottom: 0; right: 0;
+  width: 20px; height: 20px;
+  cursor: se-resize; border-radius: 0 0 10px 0;
+}
+.resize-handle::after {
+  content: '';
+  position: absolute; bottom: 5px; right: 5px;
+  width: 7px; height: 7px;
+  border-right: 2px solid #484f58; border-bottom: 2px solid #484f58;
+  border-radius: 1px;
+}
+
+/* link anchors inside highlighted code */
+.link-anchor {
+  background: rgba(56,139,253,0.18);
+  border-bottom: 1.5px solid #388bfd;
+  border-radius: 2px; cursor: pointer; padding: 0 1px;
+}
+.link-anchor:hover { background: rgba(56,139,253,0.35); }
+
+/* ── SVG links ── */
+.link-path {
+  fill: none; stroke: #388bfd; stroke-width: 1.5;
+  opacity: 0.65;
+}
+.link-label {
+  fill: #6e7681; font-size: 11px; font-family: monospace;
+  pointer-events: none;
+}
+
+/* ── Toolbar ── */
+#toolbar {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  z-index: 200; white-space: nowrap; user-select: none;
+}
+#toolbar .logo { color: #388bfd; font-weight: 700; font-size: 14px; }
+#toolbar .sep { width: 1px; height: 18px; background: #30363d; flex-shrink: 0; }
+#toolbar .hint { font-size: 11px; color: #6e7681; }
+.tb-btn {
+  padding: 5px 12px; font-size: 12px;
+  border: 1px solid #30363d; border-radius: 6px;
+  background: #21262d; color: #c9d1d9; cursor: pointer;
+}
+.tb-btn:hover { background: #30363d; }
+
+/* ── Link tooltip ── */
+#link-tip {
+  position: fixed; z-index: 300;
+  background: #1f6feb; color: #fff;
+  padding: 5px 13px; border-radius: 6px;
+  font-size: 12px; cursor: pointer;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+  display: none; white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+#link-tip:hover { background: #388bfd; }
+
+/* ── Status bar ── */
+#status {
+  position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+  background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+  padding: 4px 14px; font-size: 11px; color: #6e7681;
+  z-index: 200; pointer-events: none; white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+body.link-mode #status {
+  background: #1b2f1b; border-color: #3fb950; color: #3fb950;
+}
+
+/* ── Link mode ── */
+body.link-mode #wrap { cursor: crosshair !important; }
+body.link-mode .node { cursor: pointer !important; }
+body.link-mode .node:hover {
+  border-color: #3fb950 !important;
+  box-shadow: 0 0 0 3px rgba(63,185,80,0.22) !important;
+}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="logo">∞ Code Canvas</span>
+  <div class="sep"></div>
+  <button class="tb-btn" id="btn-add">＋ ブロック追加</button>
+  <div class="sep"></div>
+  <span class="hint">ダブルクリック: ブロック追加 &nbsp;|&nbsp; スクロール: ズーム &nbsp;|&nbsp; Space+ドラッグ / 中ボタン: 移動 &nbsp;|&nbsp; テキスト選択 → リンク</span>
+</div>
+
+<div id="wrap">
+  <div id="canvas"></div>
+  <svg id="svg-links">
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#388bfd" opacity="0.65"/>
+      </marker>
+    </defs>
+  </svg>
+</div>
+
+<div id="link-tip">🔗 ここからリンクを作成</div>
+<div id="status">準備完了</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+const S = {
+  nodes: [],
+  links: [],
+  vp: { x: 0, y: 0, scale: 1 },
+  nid: 1,   // next node id
+  lid: 1,   // next link id
+  sel: null,        // selected node id
+  editing: null,    // editing node id
+  drag: null,       // { id, sx, sy, ox, oy }
+  resize: null,     // { id, sx, sy, ow, oh }
+  pan: null,        // { sx, sy }
+  spaceDown: false,
+  linkMode: false,
+  pending: null,    // { fromId, text }
+};
+
+// ═══════════════════════════════════════════════════════
+// DOM REFS
+// ═══════════════════════════════════════════════════════
+const wrap      = document.getElementById('wrap');
+const canvas    = document.getElementById('canvas');
+const svgLinks  = document.getElementById('svg-links');
+const linkTip   = document.getElementById('link-tip');
+const statusEl  = document.getElementById('status');
+
+// ═══════════════════════════════════════════════════════
+// VIEWPORT
+// ═══════════════════════════════════════════════════════
+function applyVP() {
+  const { x, y, scale } = S.vp;
+  canvas.style.transform = `translate(${x}px,${y}px) scale(${scale})`;
+  // Parallax grid
+  const gs = 28 * scale;
+  wrap.style.backgroundSize = `${gs}px ${gs}px`;
+  wrap.style.backgroundPosition = `${x % gs}px ${y % gs}px`;
+  renderLinks();
+}
+
+function s2c(sx, sy) {
+  return {
+    x: (sx - S.vp.x) / S.vp.scale,
+    y: (sy - S.vp.y) / S.vp.scale,
+  };
+}
+
+function zoom(factor, mx, my) {
+  const ns = Math.min(4, Math.max(0.08, S.vp.scale * factor));
+  const r  = ns / S.vp.scale;
+  S.vp.x  = mx - (mx - S.vp.x) * r;
+  S.vp.y  = my - (my - S.vp.y) * r;
+  S.vp.scale = ns;
+  applyVP();
+  setStatus(`ズーム: ${Math.round(ns * 100)}%`);
+}
+
+// ═══════════════════════════════════════════════════════
+// HIGHLIGHT
+// ═══════════════════════════════════════════════════════
+function highlight(code) {
+  if (!code.trim()) return { html: esc(code), lang: 'text' };
+  const res = hljs.highlightAuto(code);
+  return { html: res.value, lang: res.language || 'text' };
+}
+
+// Replace first occurrence of `rawText` in HTML string, only inside text nodes (outside tags)
+function injectAnchor(html, rawText, linkId) {
+  const pat = rawText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re  = new RegExp(pat);
+  // split on HTML tags
+  const parts = html.split(/(<[^>]*>)/);
+  let done = false;
+  return parts.map((p, i) => {
+    if (done || i % 2 === 1) return p; // tag → pass through
+    if (re.test(p)) {
+      done = true;
+      return p.replace(re,
+        `<span class="link-anchor" data-lid="${linkId}">${esc(rawText)}</span>`
+      );
+    }
+    return p;
+  }).join('');
+}
+
+function buildCodeHTML(code, nodeId) {
+  let { html, lang } = highlight(code);
+  const nodeLinks = S.links.filter(l => l.fromId === nodeId);
+  for (const lnk of nodeLinks) {
+    html = injectAnchor(html, lnk.text, lnk.id);
+  }
+  return { html, lang };
+}
+
+// ═══════════════════════════════════════════════════════
+// NODE RENDERING
+// ═══════════════════════════════════════════════════════
+function ndEl(id) { return document.getElementById('nd-' + id); }
+
+function addNode(x, y, code) {
+  const n = {
+    id: S.nid++, x, y, w: 430, h: 270,
+    code: code ?? defaultCode(),
+    lang: 'javascript',
+  };
+  S.nodes.push(n);
+  const el = document.createElement('div');
+  el.className = 'node';
+  el.id = 'nd-' + n.id;
+  canvas.appendChild(el);
+  setupNodeEvents(n, el);
+  renderNode(n, el);
+  return n;
+}
+
+function defaultCode() {
+  return `// 新しいコードブロック\nfunction greet(name) {\n  return \`Hello, \${name}!\`;\n}\n\nconsole.log(greet('World'));`;
+}
+
+function renderNode(n, el) {
+  el = el || ndEl(n.id);
+  if (!el) return;
+
+  el.style.left   = n.x + 'px';
+  el.style.top    = n.y + 'px';
+  el.style.width  = n.w + 'px';
+  el.style.height = n.h + 'px';
+  el.classList.toggle('selected', S.sel === n.id);
+
+  if (S.editing === n.id) {
+    el.innerHTML = editHTML(n);
+    const ta = el.querySelector('textarea');
+    ta.style.height = (n.h - 42) + 'px';
+    ta.addEventListener('input', () => {
+      n.code = ta.value;
+      const r = hljs.highlightAuto(n.code.slice(0, 500));
+      n.lang = r.language || 'text';
+      el.querySelector('.lang-badge').textContent = n.lang;
+    });
+    el.querySelector('.btn-done').addEventListener('click', e => {
+      e.stopPropagation(); stopEdit();
+    });
+    el.querySelector('.btn-del').addEventListener('click', e => {
+      e.stopPropagation(); removeNode(n.id);
+    });
+    ta.focus();
+  } else {
+    const { html, lang } = buildCodeHTML(n.code, n.id);
+    n.lang = lang;
+    el.innerHTML = viewHTML(n, html);
+    el.querySelector('.btn-edit').addEventListener('click', e => {
+      e.stopPropagation(); startEdit(n.id);
+    });
+    el.querySelector('.btn-del').addEventListener('click', e => {
+      e.stopPropagation(); removeNode(n.id);
+    });
+    el.querySelectorAll('.link-anchor').forEach(a => {
+      a.addEventListener('click', e => {
+        e.stopPropagation();
+        const lnk = S.links.find(l => l.id === +a.dataset.lid);
+        if (!lnk) return;
+        if (e.altKey || e.metaKey) {
+          if (confirm(`リンク "${lnk.text}" を削除しますか？`)) removeLink(lnk.id);
+        } else {
+          jumpTo(lnk.toId);
+        }
+      });
+    });
+  }
+
+  const rh = el.querySelector('.resize-handle');
+  if (rh) {
+    rh.addEventListener('mousedown', e => {
+      e.stopPropagation(); e.preventDefault();
+      S.resize = { id: n.id, sx: e.clientX, sy: e.clientY, ow: n.w, oh: n.h };
+    });
+  }
+}
+
+function editHTML(n) {
+  return `
+  <div class="node-header">
+    <span class="lang-badge">${esc(n.lang)}</span>
+    <span style="color:#6e7681;font-size:11px;margin-left:4px;">編集中...</span>
+    <div class="node-actions" style="opacity:1">
+      <button class="node-btn btn-done">✓ 完了</button>
+      <button class="node-btn danger btn-del">削除</button>
+    </div>
+  </div>
+  <div class="node-body">
+    <textarea spellcheck="false">${esc(n.code)}</textarea>
+  </div>
+  <div class="resize-handle"></div>`;
+}
+
+function viewHTML(n, codeHtml) {
+  return `
+  <div class="node-header">
+    <span class="lang-badge">${esc(n.lang)}</span>
+    <div class="node-actions">
+      <button class="node-btn btn-edit">編集</button>
+      <button class="node-btn danger btn-del">✕</button>
+    </div>
+  </div>
+  <div class="node-body">
+    <pre><code class="hljs">${codeHtml}</code></pre>
+  </div>
+  <div class="resize-handle"></div>`;
+}
+
+function setupNodeEvents(n, el) {
+  el.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+
+    // ── link-mode: clicking a node creates a link ──
+    if (S.linkMode) {
+      if (S.pending && S.pending.fromId !== n.id) {
+        createLink(S.pending.fromId, S.pending.text, n.id);
+        exitLinkMode();
+      }
+      e.stopPropagation();
+      return;
+    }
+
+    selectNode(n.id);
+
+    // drag from header
+    if (e.target.closest('.node-header') && !e.target.closest('.node-btn')) {
+      e.preventDefault();
+      S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y };
+      el.classList.add('dragging');
+    }
+  });
+
+  el.addEventListener('dblclick', e => {
+    if (e.target.closest('.node-body') && S.editing !== n.id) {
+      e.stopPropagation();
+      startEdit(n.id);
+    }
+  });
+}
+
+function startEdit(id) {
+  if (S.editing === id) return;
+  if (S.editing) stopEdit();
+  S.editing = id;
+  renderNode(S.nodes.find(n => n.id === id));
+}
+
+function stopEdit() {
+  if (!S.editing) return;
+  const id = S.editing;
+  S.editing = null;
+  const n = S.nodes.find(n => n.id === id);
+  if (n) renderNode(n);
+  renderLinks();
+}
+
+function selectNode(id) {
+  const prev = S.sel;
+  S.sel = id;
+  // only update CSS class — do NOT rebuild innerHTML here
+  if (prev && prev !== id) ndEl(prev)?.classList.remove('selected');
+  if (id) ndEl(id)?.classList.add('selected');
+}
+
+function removeNode(id) {
+  S.nodes = S.nodes.filter(n => n.id !== id);
+  S.links = S.links.filter(l => l.fromId !== id && l.toId !== id);
+  const el = ndEl(id);
+  if (el) el.remove();
+  if (S.sel === id)     S.sel = null;
+  if (S.editing === id) S.editing = null;
+  renderLinks();
+}
+
+function jumpTo(id) {
+  const n = S.nodes.find(n => n.id === id);
+  if (!n) return;
+  const vw = wrap.clientWidth, vh = wrap.clientHeight;
+  S.vp.x = vw / 2 - (n.x + n.w / 2) * S.vp.scale;
+  S.vp.y = vh / 2 - (n.y + n.h / 2) * S.vp.scale;
+  applyVP();
+  selectNode(id);
+}
+
+// ═══════════════════════════════════════════════════════
+// LINKS
+// ═══════════════════════════════════════════════════════
+function createLink(fromId, text, toId) {
+  // avoid duplicate
+  if (S.links.find(l => l.fromId === fromId && l.text === text && l.toId === toId)) return;
+  S.links.push({ id: S.lid++, fromId, text, toId });
+  renderNode(S.nodes.find(n => n.id === fromId));
+  renderLinks();
+}
+
+function removeLink(id) {
+  const lnk = S.links.find(l => l.id === id);
+  S.links = S.links.filter(l => l.id !== id);
+  if (lnk) renderNode(S.nodes.find(n => n.id === lnk.fromId));
+  renderLinks();
+}
+
+function edgePoint(from, to) {
+  const fcx = from.x + from.w / 2, fcy = from.y + from.h / 2;
+  const tcx = to.x + to.w / 2,   tcy = to.y + to.h / 2;
+  const dx = tcx - fcx, dy = tcy - fcy;
+  const hw = from.w / 2, hh = from.h / 2;
+  if (Math.abs(dx) * hh > Math.abs(dy) * hw) {
+    const x = fcx + (dx > 0 ? hw : -hw);
+    const y = fcy + dy / (Math.abs(dx) || 1) * hw;
+    return { x, y };
+  } else {
+    const y = fcy + (dy > 0 ? hh : -hh);
+    const x = fcx + dx / (Math.abs(dy) || 1) * hh;
+    return { x, y };
+  }
+}
+
+// canvas coords → screen coords
+function c2s(cx, cy) {
+  return {
+    x: cx * S.vp.scale + S.vp.x,
+    y: cy * S.vp.scale + S.vp.y,
+  };
+}
+
+function renderLinks() {
+  svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+  for (const lnk of S.links) {
+    const fn = S.nodes.find(n => n.id === lnk.fromId);
+    const tn = S.nodes.find(n => n.id === lnk.toId);
+    if (!fn || !tn) continue;
+
+    // edge points in canvas coords, then convert to screen
+    const fpc = edgePoint(fn, tn);
+    const tpc = edgePoint(tn, fn);
+    const fp = c2s(fpc.x, fpc.y);
+    const tp = c2s(tpc.x, tpc.y);
+
+    const dx = tp.x - fp.x;
+    const d = `M${fp.x},${fp.y} C${fp.x + dx * 0.45},${fp.y} ${tp.x - dx * 0.45},${tp.y} ${tp.x},${tp.y}`;
+
+    const g = svgE('g', { class: 'lk' });
+    g.appendChild(svgE('path', {
+      d, class: 'link-path', 'marker-end': 'url(#arrow)'
+    }));
+
+    const mx = (fp.x + tp.x) / 2;
+    const my = (fp.y + tp.y) / 2 - 9;
+    const txt = svgE('text', { x: mx, y: my, class: 'link-label', 'text-anchor': 'middle' });
+    txt.textContent = `"${lnk.text}"`;
+    g.appendChild(txt);
+
+    svgLinks.appendChild(g);
+  }
+}
+
+function svgE(tag, attrs = {}) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+// ═══════════════════════════════════════════════════════
+// LINK MODE
+// ═══════════════════════════════════════════════════════
+function enterLinkMode(fromId, text) {
+  S.linkMode = true;
+  S.pending = { fromId, text };
+  document.body.classList.add('link-mode');
+  setStatus(`🔗 リンク先ブロックをクリック ─ "${text}" → ? (Esc でキャンセル)`);
+}
+
+function exitLinkMode() {
+  S.linkMode = false;
+  S.pending = null;
+  document.body.classList.remove('link-mode');
+  linkTip.style.display = 'none';
+  setStatus('準備完了');
+}
+
+// ═══════════════════════════════════════════════════════
+// TEXT SELECTION → LINK
+// ═══════════════════════════════════════════════════════
+document.addEventListener('mouseup', e => {
+  if (S.editing || S.linkMode) return;
+
+  const sel  = window.getSelection();
+  const text = sel?.toString().trim();
+  if (!text) { linkTip.style.display = 'none'; return; }
+
+  // find ancestor .node
+  let el = sel.anchorNode?.parentElement;
+  while (el && !el.classList?.contains('node')) el = el.parentElement;
+  if (!el) { linkTip.style.display = 'none'; return; }
+
+  const fromId = +el.id.replace('nd-', '');
+  const range  = sel.getRangeAt(0);
+  const rect   = range.getBoundingClientRect();
+
+  linkTip.style.display = 'block';
+  linkTip.style.left    = (rect.left + rect.width / 2) + 'px';
+  linkTip.style.top     = (rect.top - 40) + 'px';
+
+  linkTip.onclick = () => {
+    sel.removeAllRanges();
+    linkTip.style.display = 'none';
+    enterLinkMode(fromId, text);
+  };
+});
+
+// hide tooltip on outside click (but not when starting a text selection in code)
+document.addEventListener('mousedown', e => {
+  if (e.target === linkTip) return;
+  if (e.target.closest('.node-body')) return;
+  linkTip.style.display = 'none';
+});
+
+// ═══════════════════════════════════════════════════════
+// CANVAS INTERACTION
+// ═══════════════════════════════════════════════════════
+wrap.addEventListener('mousedown', e => {
+  const onBg = e.target === wrap || e.target === canvas;
+
+  if (S.linkMode) {
+    if (onBg) exitLinkMode();
+    return;
+  }
+
+  if (onBg) {
+    selectNode(null);
+    if (S.editing) stopEdit();
+  }
+
+  if (e.button === 1 || (e.button === 0 && S.spaceDown)) {
+    e.preventDefault();
+    S.pan = { sx: e.clientX - S.vp.x, sy: e.clientY - S.vp.y };
+    wrap.style.cursor = 'grabbing';
+  }
+});
+
+wrap.addEventListener('dblclick', e => {
+  if (S.linkMode) return;
+  if (e.target !== wrap && e.target !== canvas) return;
+  const p = s2c(e.clientX, e.clientY);
+  addNode(p.x - 215, p.y - 135);
+});
+
+document.addEventListener('mousemove', e => {
+  if (S.pan) {
+    S.vp.x = e.clientX - S.pan.sx;
+    S.vp.y = e.clientY - S.pan.sy;
+    applyVP();
+  } else if (S.drag) {
+    const r = 1 / S.vp.scale;
+    const n = S.nodes.find(n => n.id === S.drag.id);
+    if (n) {
+      n.x = S.drag.ox + (e.clientX - S.drag.sx) * r;
+      n.y = S.drag.oy + (e.clientY - S.drag.sy) * r;
+      const el = ndEl(n.id);
+      if (el) { el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; }
+      renderLinks();
+    }
+  } else if (S.resize) {
+    const r = 1 / S.vp.scale;
+    const n = S.nodes.find(n => n.id === S.resize.id);
+    if (n) {
+      n.w = Math.max(250, S.resize.ow + (e.clientX - S.resize.sx) * r);
+      n.h = Math.max(120, S.resize.oh + (e.clientY - S.resize.sy) * r);
+      const el = ndEl(n.id);
+      if (el) {
+        el.style.width  = n.w + 'px';
+        el.style.height = n.h + 'px';
+        const ta = el.querySelector('textarea');
+        if (ta) ta.style.height = (n.h - 42) + 'px';
+      }
+      renderLinks();
+    }
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (S.drag) ndEl(S.drag.id)?.classList.remove('dragging');
+  S.drag = null; S.resize = null;
+  if (S.pan) { S.pan = null; wrap.style.cursor = ''; }
+});
+
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = wrap.getBoundingClientRect();
+  zoom(e.deltaY < 0 ? 1.1 : 0.9, e.clientX - rect.left, e.clientY - rect.top);
+}, { passive: false });
+
+// ── Keyboard ──
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && !S.editing) {
+    e.preventDefault();
+    S.spaceDown = true;
+    if (!S.pan) wrap.style.cursor = 'grab';
+  }
+  if (e.code === 'Escape') {
+    if (S.linkMode) exitLinkMode();
+    else if (S.editing) stopEdit();
+  }
+  if (e.code === 'Delete' && S.sel && !S.editing) {
+    removeNode(S.sel);
+  }
+  // Ctrl/Cmd + 0: reset zoom
+  if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+    e.preventDefault();
+    S.vp.x = wrap.clientWidth / 2 - 500;
+    S.vp.y = wrap.clientHeight / 2 - 200;
+    S.vp.scale = 1;
+    applyVP();
+    setStatus('ズームリセット');
+  }
+});
+
+document.addEventListener('keyup', e => {
+  if (e.code === 'Space') {
+    S.spaceDown = false;
+    if (!S.pan) wrap.style.cursor = '';
+  }
+});
+
+// ── Toolbar button ──
+document.getElementById('btn-add').addEventListener('click', () => {
+  const p = s2c(wrap.clientWidth / 2, wrap.clientHeight / 2);
+  addNode(p.x - 215, p.y - 135);
+});
+
+// ═══════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+function setStatus(msg) { statusEl.textContent = msg; }
+
+// ═══════════════════════════════════════════════════════
+// SAMPLE DATA
+// ═══════════════════════════════════════════════════════
+const n1 = addNode(60, 80, `function fibonacci(n) {
+  if (n <= 1) return n;
+  return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+// メモ化版
+function fibMemo(n, memo = {}) {
+  if (n in memo) return memo[n];
+  if (n <= 1) return n;
+  return memo[n] = fibMemo(n - 1, memo) + fibMemo(n - 2, memo);
+}
+
+console.log(fibMemo(40)); // 102334155`);
+
+const n2 = addNode(580, 50, `def merge_sort(arr):
+    if len(arr) <= 1:
+        return arr
+    mid = len(arr) // 2
+    left  = merge_sort(arr[:mid])
+    right = merge_sort(arr[mid:])
+    return merge(left, right)
+
+def merge(left, right):
+    result, i, j = [], 0, 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            result.append(left[i]); i += 1
+        else:
+            result.append(right[j]); j += 1
+    return result + left[i:] + right[j:]`);
+
+const n3 = addNode(310, 430, `SELECT
+  u.name,
+  COUNT(o.id)   AS order_count,
+  SUM(o.total)  AS total_spent
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE o.created_at > NOW() - INTERVAL '30 days'
+GROUP BY u.id, u.name
+HAVING SUM(o.total) > 500
+ORDER BY total_spent DESC
+LIMIT 20;`);
+
+// Center the initial view
+S.vp.x = 40;
+S.vp.y = 40;
+applyVP();
+
+setStatus('準備完了 ─ ダブルクリックでブロック追加 | テキスト選択でリンク作成 | Alt+クリックでリンク削除');
+</script>
+</body>
+</html>
