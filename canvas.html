@@ -136,6 +136,7 @@ body {
 .node-body {
   flex: 1; overflow: auto; position: relative;
   border-radius: 0 0 10px 10px;
+  user-select: text;
 }
 
 .node-body pre {
@@ -768,8 +769,9 @@ document.addEventListener('mouseup', e => {
   const text = sel?.toString().trim();
   if (!text) { linkTip.style.display = 'none'; return; }
 
-  // find ancestor .node
-  let el = sel.anchorNode?.parentElement;
+  // find ancestor .node (use commonAncestorContainer to avoid direction-dependent anchorNode)
+  const container = sel.getRangeAt(0).commonAncestorContainer;
+  let el = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
   while (el && !el.classList?.contains('node')) el = el.parentElement;
   if (!el) { linkTip.style.display = 'none'; return; }
 
@@ -782,7 +784,7 @@ document.addEventListener('mouseup', e => {
 
   linkTip.style.display = 'block';
   linkTip.style.left    = (rect.left + rect.width / 2) + 'px';
-  linkTip.style.top     = (rect.top - 40) + 'px';
+  linkTip.style.top     = Math.max(8, rect.top - 40) + 'px';
 
   linkTip.onclick = () => {
     sel.removeAllRanges();
@@ -1099,56 +1101,9 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 });
 
 // ═══════════════════════════════════════════════════════
-// INIT: restore or show sample data
+// INIT
 // ═══════════════════════════════════════════════════════
-if (!restoreFromStorage()) {
-  addNode(60, 80, `function fibonacci(n) {
-  if (n <= 1) return n;
-  return fibonacci(n - 1) + fibonacci(n - 2);
-}
-
-// メモ化版
-function fibMemo(n, memo = {}) {
-  if (n in memo) return memo[n];
-  if (n <= 1) return n;
-  return memo[n] = fibMemo(n - 1, memo) + fibMemo(n - 2, memo);
-}
-
-console.log(fibMemo(40)); // 102334155`);
-
-  addNode(580, 50, `def merge_sort(arr):
-    if len(arr) <= 1:
-        return arr
-    mid = len(arr) // 2
-    left  = merge_sort(arr[:mid])
-    right = merge_sort(arr[mid:])
-    return merge(left, right)
-
-def merge(left, right):
-    result, i, j = [], 0, 0
-    while i < len(left) and j < len(right):
-        if left[i] <= right[j]:
-            result.append(left[i]); i += 1
-        else:
-            result.append(right[j]); j += 1
-    return result + left[i:] + right[j:]`);
-
-  addNode(310, 430, `SELECT
-  u.name,
-  COUNT(o.id)   AS order_count,
-  SUM(o.total)  AS total_spent
-FROM users u
-LEFT JOIN orders o ON u.id = o.user_id
-WHERE o.created_at > NOW() - INTERVAL '30 days'
-GROUP BY u.id, u.name
-HAVING SUM(o.total) > 500
-ORDER BY total_spent DESC
-LIMIT 20;`);
-
-  S.vp.x = 40;
-  S.vp.y = 40;
-  applyVP();
-}
+restoreFromStorage();
 
 setStatus('準備完了 ─ ダブルクリックでブロック追加 | テキスト選択でリンク作成 | Alt+クリックでリンク削除');
 </script>
