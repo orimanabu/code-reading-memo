@@ -1119,7 +1119,8 @@ document.addEventListener('mouseup', () => {
 // Export
 document.getElementById('btn-export').addEventListener('click', () => {
   saveState();
-  const data = localStorage.getItem(STORAGE_KEY) ?? '{}';
+  const raw = localStorage.getItem(STORAGE_KEY) ?? '{}';
+  const data = JSON.stringify(JSON.parse(raw), null, 2);
   const blob = new Blob([data], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
