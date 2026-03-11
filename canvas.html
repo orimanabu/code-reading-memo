@@ -52,6 +52,10 @@ body {
   border-color: #388bfd;
   box-shadow: 0 0 0 3px rgba(56,139,253,0.22), 0 8px 32px rgba(0,0,0,0.55);
 }
+.node.multi-selected {
+  border-color: #388bfd;
+  box-shadow: 0 0 0 3px rgba(56,139,253,0.35), 0 8px 32px rgba(0,0,0,0.55);
+}
 .node.dragging {
   opacity: 0.5;
 }
@@ -277,7 +281,7 @@ body.link-mode .node:hover {
   <button class="tb-btn danger" id="btn-clear">🗑 クリア</button>
   <div class="sep"></div>
   <span id="mode-indicator">SELECT</span>
-  <span class="hint">v: 選択 &nbsp;|&nbsp; h: ハンド &nbsp;|&nbsp; Ctrl/Cmd+ドラッグ: ズーム &nbsp;|&nbsp; ダブルクリック: ブロック追加 &nbsp;|&nbsp; テキスト選択 → リンク</span>
+  <span class="hint">v: 選択 &nbsp;|&nbsp; h: ハンド &nbsp;|&nbsp; Shift+クリック: 複数選択 &nbsp;|&nbsp; Ctrl/Cmd+ドラッグ: ズーム &nbsp;|&nbsp; ダブルクリック: ブロック追加 &nbsp;|&nbsp; テキスト選択 → リンク</span>
 </div>
 
 <div id="wrap">
@@ -307,8 +311,9 @@ const S = {
   nid: 1,   // next node id
   lid: 1,   // next link id
   sel: null,        // selected node id
+  multiSel: new Set(), // multi-selected node ids (Shift+click)
   editing: null,    // editing node id
-  drag: null,       // { id, sx, sy, ox, oy }
+  drag: null,       // { id, sx, sy, ox, oy, others: [{id, ox, oy}] }
   resize: null,     // { id, sx, sy, ow, oh }
   pan: null,        // { sx, sy }
   zoomDrag: null,   // { lastY, cx, cy }
@@ -504,6 +509,7 @@ function renderNode(n, el) {
   el.style.width  = n.w + 'px';
   el.style.height = n.h + 'px';
   el.classList.toggle('selected', S.sel === n.id);
+  el.classList.toggle('multi-selected', S.multiSel.has(n.id));
 
   if (S.editing === n.id) {
     el.innerHTML = editHTML(n);
@@ -627,10 +633,53 @@ function setupNodeEvents(n, el) {
       return;
     }
 
+    // Shift+click: toggle multi-selection (anywhere on node except buttons/inputs/textarea)
+    if (e.shiftKey) {
+      if (!e.target.closest('.node-btn') && !e.target.closest('input') && !e.target.closest('textarea')) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Auto-include the currently selected node (S.sel) into multiSel.
+        // This handles the case where the user normal-clicked a node first,
+        // then shift-clicked others — S.sel would be set but not in multiSel.
+        if (S.sel !== null && !S.multiSel.has(S.sel)) {
+          S.multiSel.add(S.sel);
+          ndEl(S.sel)?.classList.add('multi-selected');
+        }
+        toggleMultiSel(n.id);
+        const count = S.multiSel.size;
+        setStatus(count > 0 ? `${count} 個のブロックを選択中 ─ ヘッダーをドラッグで一括移動` : '準備完了');
+      }
+      return;
+    }
+
+    const onHeader = e.target.closest('.node-header') && !e.target.closest('.node-btn') && !e.target.closest('input');
+
+    // If clicking a node already in multi-selection: keep selection, start group drag
+    if (S.multiSel.size >= 1 && S.multiSel.has(n.id)) {
+      S.sel = n.id;
+      if (onHeader) {
+        e.preventDefault();
+        // Store initial positions for ALL selected nodes (including primary).
+        // Also include S.sel as a safety net in case it wasn't added via shift-click.
+        const allIds = new Set(S.multiSel);
+        if (S.sel !== null) allIds.add(S.sel);
+        const multiOrigins = new Map();
+        allIds.forEach(id => {
+          const mn = S.nodes.find(nn => nn.id === id);
+          if (mn) multiOrigins.set(id, { ox: mn.x, oy: mn.y });
+        });
+        S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, multiOrigins };
+        allIds.forEach(id => ndEl(id)?.classList.add('dragging'));
+      }
+      return;
+    }
+
+    // Normal click: clear multi-selection, select this node
+    clearMultiSel();
     selectNode(n.id);
 
     // drag from header
-    if (e.target.closest('.node-header') && !e.target.closest('.node-btn') && !e.target.closest('input')) {
+    if (onHeader) {
       e.preventDefault();
       S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y };
       el.classList.add('dragging');
@@ -670,6 +719,21 @@ function selectNode(id) {
   if (id) ndEl(id)?.classList.add('selected');
 }
 
+function toggleMultiSel(id) {
+  if (S.multiSel.has(id)) {
+    S.multiSel.delete(id);
+    ndEl(id)?.classList.remove('multi-selected');
+  } else {
+    S.multiSel.add(id);
+    ndEl(id)?.classList.add('multi-selected');
+  }
+}
+
+function clearMultiSel() {
+  S.multiSel.forEach(id => ndEl(id)?.classList.remove('multi-selected'));
+  S.multiSel.clear();
+}
+
 function removeNode(id) {
   S.nodes = S.nodes.filter(n => n.id !== id);
   S.links = S.links.filter(l => l.fromId !== id && l.toId !== id);
@@ -677,6 +741,7 @@ function removeNode(id) {
   if (el) el.remove();
   if (S.sel === id)     S.sel = null;
   if (S.editing === id) S.editing = null;
+  S.multiSel.delete(id);
   renderLinks();
   scheduleSave();
 }
@@ -872,6 +937,8 @@ wrap.addEventListener('mousedown', e => {
 
   if (onBg) {
     selectNode(null);
+    clearMultiSel();
+    setStatus('準備完了');
     if (S.editing) stopEdit();
   }
 
@@ -921,14 +988,30 @@ document.addEventListener('mousemove', e => {
     S.zoomDrag.lastY = e.clientY;
   } else if (S.drag) {
     const r = 1 / S.vp.scale;
-    const n = S.nodes.find(n => n.id === S.drag.id);
-    if (n) {
-      n.x = S.drag.ox + (e.clientX - S.drag.sx) * r;
-      n.y = S.drag.oy + (e.clientY - S.drag.sy) * r;
-      const el = ndEl(n.id);
-      if (el) { el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; }
-      renderLinks();
+    const dx = (e.clientX - S.drag.sx) * r;
+    const dy = (e.clientY - S.drag.sy) * r;
+    if (S.drag.multiOrigins) {
+      // Multi-node drag: move all selected nodes together
+      S.drag.multiOrigins.forEach(({ ox, oy }, id) => {
+        const mn = S.nodes.find(nn => nn.id === id);
+        if (mn) {
+          mn.x = ox + dx;
+          mn.y = oy + dy;
+          const mel = ndEl(id);
+          if (mel) { mel.style.left = mn.x + 'px'; mel.style.top = mn.y + 'px'; }
+        }
+      });
+    } else {
+      // Single-node drag
+      const n = S.nodes.find(n => n.id === S.drag.id);
+      if (n) {
+        n.x = S.drag.ox + dx;
+        n.y = S.drag.oy + dy;
+        const el = ndEl(n.id);
+        if (el) { el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; }
+      }
     }
+    renderLinks();
   } else if (S.resize) {
     const r = 1 / S.vp.scale;
     const n = S.nodes.find(n => n.id === S.resize.id);
@@ -948,7 +1031,13 @@ document.addEventListener('mousemove', e => {
 });
 
 document.addEventListener('mouseup', () => {
-  if (S.drag) ndEl(S.drag.id)?.classList.remove('dragging');
+  if (S.drag) {
+    if (S.drag.multiOrigins) {
+      S.drag.multiOrigins.forEach((_, id) => ndEl(id)?.classList.remove('dragging'));
+    } else {
+      ndEl(S.drag.id)?.classList.remove('dragging');
+    }
+  }
   S.drag = null; S.resize = null; S.zoomDrag = null;
   if (S.pan) S.pan = null;
   updateCursor();
