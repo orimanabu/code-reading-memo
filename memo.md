@@ -48,6 +48,8 @@
 
 ❯ あるコードブロックA内の選択文字列から、別のコードブロックBにリンクが存在するときに、A内の別の選択文字列からBにリンクを追加できません。なおして
 
+> samples/crun_init_containers.jsonには、`init_container()` のコードブロックから `crun_make_error()` のコードブロックにリンクが作成されています。init_containerのコードブロック内の別のcrun_make_errorを選択してcrun_make_error()のコードブロックにリンクを作成できません。修正してください
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して
