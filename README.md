@@ -2,6 +2,10 @@
 
 ブラウザ上で動くコード読解支援ツールです。無限キャンバス上でコードスニペットを視覚的に整理・関連付けできます。
 
+![screenshot1](images/screenshot-1.png)
+
+![screenshot2](images/screenshot-2.png)
+
 # 主な機能
 
 - コードブロック: 矩形の中にコードを配置。タイトル・ファイルパスも記載可能
