@@ -281,7 +281,7 @@ body.link-mode .node:hover {
   <button class="tb-btn danger" id="btn-clear">🗑 クリア</button>
   <div class="sep"></div>
   <span id="mode-indicator">SELECT</span>
-  <span class="hint">v: 選択 &nbsp;|&nbsp; h: ハンド &nbsp;|&nbsp; Shift+クリック: 複数選択 &nbsp;|&nbsp; Ctrl/Cmd+ドラッグ: ズーム &nbsp;|&nbsp; ダブルクリック: ブロック追加 &nbsp;|&nbsp; テキスト選択 → リンク</span>
+  <span class="hint">v: 選択 &nbsp;|&nbsp; h: ハンド &nbsp;|&nbsp; Shift+クリック: 複数選択 &nbsp;|&nbsp; Cmd/Ctrl+C/X/V: コピー/カット/ペースト &nbsp;|&nbsp; Del: 削除 &nbsp;|&nbsp; Ctrl/Cmd+ドラッグ: ズーム &nbsp;|&nbsp; ダブルクリック: ブロック追加 &nbsp;|&nbsp; テキスト選択 → リンク</span>
 </div>
 
 <div id="wrap">
@@ -320,6 +320,7 @@ const S = {
   spaceDown: false,
   mode: 'select',   // 'select' | 'hand'
   linkMode: false,
+  clipboard: [],    // copied node snapshots [{x,y,w,h,code,lang,title,filePath}]
   pending: null,    // { fromId, text }
 };
 
@@ -746,6 +747,67 @@ function removeNode(id) {
   scheduleSave();
 }
 
+// ═══════════════════════════════════════════════════════
+// COPY / CUT / PASTE
+// ═══════════════════════════════════════════════════════
+function getSelectedIds() {
+  if (S.multiSel.size > 0) return [...S.multiSel];
+  if (S.sel !== null) return [S.sel];
+  return [];
+}
+
+function copyNodes() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+  S.clipboard = ids.map(id => {
+    const n = S.nodes.find(nn => nn.id === id);
+    if (!n) return null;
+    return { x: n.x, y: n.y, w: n.w, h: n.h, code: n.code, lang: n.lang, title: n.title, filePath: n.filePath };
+  }).filter(Boolean);
+  setStatus(`${S.clipboard.length} 個のブロックをコピーしました (Cmd/Ctrl+V でペースト)`);
+}
+
+function cutNodes() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+  S.clipboard = ids.map(id => {
+    const n = S.nodes.find(nn => nn.id === id);
+    if (!n) return null;
+    return { x: n.x, y: n.y, w: n.w, h: n.h, code: n.code, lang: n.lang, title: n.title, filePath: n.filePath };
+  }).filter(Boolean);
+  ids.forEach(id => removeNode(id));
+  setStatus(`${S.clipboard.length} 個のブロックをカットしました (Cmd/Ctrl+V でペースト)`);
+}
+
+function pasteNodes() {
+  if (S.clipboard.length === 0) return;
+  clearMultiSel();
+  selectNode(null);
+  const offset = 30;
+  for (const data of S.clipboard) {
+    const n = {
+      id: S.nid++,
+      x: data.x + offset, y: data.y + offset,
+      w: data.w, h: data.h,
+      code: data.code, lang: data.lang,
+      title: data.title, filePath: data.filePath,
+    };
+    S.nodes.push(n);
+    const el = document.createElement('div');
+    el.className = 'node';
+    el.id = 'nd-' + n.id;
+    canvas.appendChild(el);
+    setupNodeEvents(n, el);
+    renderNode(n, el);
+    S.multiSel.add(n.id);
+    ndEl(n.id)?.classList.add('multi-selected');
+  }
+  // Shift clipboard so the next paste lands further offset
+  S.clipboard = S.clipboard.map(d => ({ ...d, x: d.x + offset, y: d.y + offset }));
+  setStatus(`${S.clipboard.length} 個のブロックをペーストしました`);
+  scheduleSave();
+}
+
 function jumpTo(id) {
   const n = S.nodes.find(n => n.id === id);
   if (!n) return;
@@ -1082,6 +1144,24 @@ document.addEventListener('keydown', e => {
     } else if (S.sel) {
       e.preventDefault();
       removeNode(S.sel);
+    }
+  }
+  // Copy / Cut / Paste
+  if ((e.metaKey || e.ctrlKey) && !isInput) {
+    if (e.key === 'c') {
+      // Allow default browser copy if text is selected in code view
+      if (!window.getSelection()?.toString().trim()) {
+        e.preventDefault();
+        copyNodes();
+      }
+    } else if (e.key === 'x') {
+      if (!window.getSelection()?.toString().trim()) {
+        e.preventDefault();
+        cutNodes();
+      }
+    } else if (e.key === 'v') {
+      e.preventDefault();
+      pasteNodes();
     }
   }
   // Ctrl/Cmd + 0: reset zoom
