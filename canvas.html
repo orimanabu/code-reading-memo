@@ -267,6 +267,35 @@ body.link-mode .node:hover {
   font-family: monospace; letter-spacing: 0.5px;
 }
 
+/* ── Line Numbers ── */
+.code-line { display: block; white-space: pre-wrap; word-break: break-word; }
+.has-ln { padding-left: 0 !important; }
+.ln-num {
+  display: inline-block; min-width: 2.8em;
+  padding-right: 8px; margin-right: 8px;
+  text-align: right; color: #484f58;
+  border-right: 1px solid #21262d;
+  cursor: pointer; user-select: none;
+  font-size: 11px; vertical-align: top;
+  transition: color 0.1s;
+}
+.ln-num:hover { color: #8b949e; }
+.ln-num-input {
+  display: inline-block; width: 3.2em;
+  padding: 0 4px; margin-right: 8px;
+  background: #1f6feb; color: #fff;
+  border: none; border-radius: 3px;
+  font-size: 11px; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  text-align: right; outline: none; vertical-align: top;
+}
+.ln-toggle {
+  font-size: 10px; color: #6e7681;
+  display: flex; align-items: center; gap: 3px;
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+.ln-toggle input[type=checkbox] { margin: 0; cursor: pointer; accent-color: #388bfd; }
+.ln-toggle:hover { color: #8b949e; }
+
 /* ── Git Config Dialog ── */
 #git-dialog-overlay {
   position: fixed; inset: 0; z-index: 500;
@@ -561,6 +590,50 @@ function injectAnchor(html, rawText, linkId) {
   }).join('');
 }
 
+// Split highlighted HTML into per-line strings, correctly handling spans that
+// cross line boundaries (e.g. highlight.js wraps ")\n{" inside one <span>).
+// At each \n we close all currently-open spans and reopen them on the next line.
+function splitHtmlLines(html) {
+  const lines = [];
+  let cur = '';
+  const openTags = []; // stack of opening tag strings, e.g. '<span class="hljs-function">'
+  let i = 0;
+  while (i < html.length) {
+    if (html[i] === '<') {
+      const end = html.indexOf('>', i);
+      if (end === -1) { cur += html.slice(i); break; }
+      const tag = html.slice(i, end + 1);
+      i = end + 1;
+      cur += tag;
+      if (tag.startsWith('</')) {
+        openTags.pop();
+      } else {
+        openTags.push(tag);
+      }
+    } else if (html[i] === '\n') {
+      // Close all open spans, emit this line, then reopen them for the next line
+      lines.push(cur + '</span>'.repeat(openTags.length));
+      cur = openTags.join('');
+      i++;
+    } else {
+      cur += html[i];
+      i++;
+    }
+  }
+  lines.push(cur);
+  return lines;
+}
+
+// Wrap highlighted HTML lines with line-number spans
+function addLineNumbers(html, start) {
+  const lines = splitHtmlLines(html);
+  // Trim trailing empty line if code ends with \n
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  return lines.map((lineHtml, i) =>
+    `<span class="code-line"><span class="ln-num" data-li="${i}">${start + i}</span>${lineHtml}</span>`
+  ).join('');
+}
+
 function buildCodeHTML(code, nodeId) {
   const n = S.nodes.find(n => n.id === nodeId);
   let { html, lang } = highlight(code, n?.filePath);
@@ -582,6 +655,7 @@ function addNode(x, y, code) {
     code: code ?? defaultCode(),
     lang: 'javascript',
     title: '', filePath: '',
+    showLineNumbers: false, lineNumberStart: 1,
   };
   S.nodes.push(n);
   const el = document.createElement('div');
@@ -655,6 +729,47 @@ function renderNode(n, el) {
         }
       });
     });
+
+    // Line-number checkbox
+    const lnCb = el.querySelector('.ln-cb');
+    if (lnCb) {
+      lnCb.addEventListener('change', e => {
+        e.stopPropagation();
+        n.showLineNumbers = lnCb.checked;
+        renderNode(n, el);
+        scheduleSave();
+      });
+      lnCb.addEventListener('mousedown', e => e.stopPropagation());
+    }
+
+    // Line-number click → inline edit
+    el.querySelectorAll('.ln-num').forEach(span => {
+      span.addEventListener('click', e => {
+        e.stopPropagation();
+        const li = parseInt(span.dataset.li, 10);
+        const currentLn = (n.lineNumberStart ?? 1) + li;
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.value = currentLn;
+        inp.className = 'ln-num-input';
+        inp.style.width = Math.max(32, String(currentLn).length * 8 + 12) + 'px';
+        span.replaceWith(inp);
+        inp.focus(); inp.select();
+        let committed = false;
+        const commit = () => {
+          if (committed) return; committed = true;
+          const newLn = parseInt(inp.value, 10);
+          if (!isNaN(newLn)) n.lineNumberStart = newLn - li;
+          renderNode(n, el);
+          scheduleSave();
+        };
+        inp.addEventListener('blur', commit);
+        inp.addEventListener('keydown', ev => {
+          if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); }
+          if (ev.key === 'Escape') { committed = true; renderNode(n, el); }
+        });
+        inp.addEventListener('mousedown', ev => ev.stopPropagation());
+      });
+    });
   }
 
   const rh = el.querySelector('.resize-handle');
@@ -691,17 +806,21 @@ function viewHTML(n, codeHtml) {
       ${n.title    ? `<span class="node-title">${esc(n.title)}</span>` : ''}
       ${n.filePath ? `<span class="node-filepath">${esc(n.filePath)}</span>` : ''}
     </div>` : '<div class="node-meta"></div>';
+  const bodyHtml = n.showLineNumbers
+    ? `<pre class="has-ln"><code class="hljs">${addLineNumbers(codeHtml, n.lineNumberStart ?? 1)}</code></pre>`
+    : `<pre><code class="hljs">${codeHtml}</code></pre>`;
   return `
   <div class="node-header">
     ${metaHtml}
     <div class="node-actions">
       <span class="lang-badge">${esc(n.lang)}</span>
+      <label class="ln-toggle" title="行番号を表示/非表示"><input type="checkbox" class="ln-cb"${n.showLineNumbers ? ' checked' : ''}> 行番号</label>
       <button class="node-btn btn-edit">編集</button>
       <button class="node-btn danger btn-del">✕</button>
     </div>
   </div>
   <div class="node-body">
-    <pre><code class="hljs">${codeHtml}</code></pre>
+    ${bodyHtml}
   </div>
   <div class="resize-handle"></div>`;
 }
@@ -1315,7 +1434,7 @@ canvasTitleEl.addEventListener('input', () => {
 function saveState() {
   const data = {
     canvasTitle: canvasTitleEl.value,
-    nodes: S.nodes.map(({ id, x, y, w, h, code, lang, title, filePath }) => ({ id, x, y, w, h, code, lang, title, filePath })),
+    nodes: S.nodes.map(({ id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart }) => ({ id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart })),
     links: S.links.map(({ id, fromId, text, toId }) => ({ id, fromId, text, toId })),
     nid: S.nid,
     lid: S.lid,
@@ -1355,7 +1474,7 @@ function loadState(data) {
   S.links = data.links ?? [];
 
   for (const nd of (data.nodes ?? [])) {
-    const n = { id: nd.id, x: nd.x, y: nd.y, w: nd.w, h: nd.h, code: nd.code, lang: nd.lang ?? 'text', title: nd.title ?? '', filePath: nd.filePath ?? '' };
+    const n = { id: nd.id, x: nd.x, y: nd.y, w: nd.w, h: nd.h, code: nd.code, lang: nd.lang ?? 'text', title: nd.title ?? '', filePath: nd.filePath ?? '', showLineNumbers: nd.showLineNumbers ?? false, lineNumberStart: nd.lineNumberStart ?? 1 };
     S.nodes.push(n);
     const el = document.createElement('div');
     el.className = 'node';
