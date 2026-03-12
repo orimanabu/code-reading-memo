@@ -305,7 +305,8 @@ body.link-mode .node:hover {
 .node-filepath.meta-empty { opacity: 0.28; font-style: italic; }
 
 /* ── Git Config Dialog ── */
-#git-dialog-overlay {
+#git-dialog-overlay,
+#fetch-dialog-overlay {
   position: fixed; inset: 0; z-index: 500;
   background: rgba(0,0,0,0.65);
   display: flex; align-items: center; justify-content: center;
@@ -424,6 +425,36 @@ body.link-mode .node:hover {
     <div class="git-form-buttons">
       <button class="tb-btn" id="git-cancel">キャンセル</button>
       <button class="git-btn-save" id="git-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Git Snippet Fetch Dialog -->
+<div id="fetch-dialog-overlay" style="display:none;">
+  <div class="git-dialog">
+    <div class="git-dialog-title">⬇ Gitからコードスニペットを取得</div>
+    <div class="git-form-note" id="fetch-git-info" style="margin-bottom:16px;"></div>
+
+    <div class="git-form-row">
+      <label class="git-form-label" for="fetch-path">相対パス</label>
+      <input class="git-form-input" id="fetch-path" type="text" placeholder="src/foo/bar.c" spellcheck="false" autocomplete="off">
+    </div>
+    <div style="display:flex;gap:12px;">
+      <div class="git-form-row" style="flex:1;">
+        <label class="git-form-label" for="fetch-start">開始行番号</label>
+        <input class="git-form-input" id="fetch-start" type="number" placeholder="1" min="1">
+      </div>
+      <div class="git-form-row" style="flex:1;">
+        <label class="git-form-label" for="fetch-end">終了行番号</label>
+        <input class="git-form-input" id="fetch-end" type="number" placeholder="50" min="1">
+      </div>
+    </div>
+
+    <div class="git-form-note" id="fetch-note"></div>
+
+    <div class="git-form-buttons">
+      <button class="tb-btn" id="fetch-cancel">キャンセル</button>
+      <button class="git-btn-save" id="fetch-ok">取得</button>
     </div>
   </div>
 </div>
@@ -738,6 +769,13 @@ function renderNode(n, el) {
       });
     });
 
+    // Git snippet fetch button
+    const btnFetch = el.querySelector('.btn-fetch-git');
+    if (btnFetch) {
+      btnFetch.addEventListener('mousedown', e => e.stopPropagation());
+      btnFetch.addEventListener('click', e => { e.stopPropagation(); openFetchDialog(n.id); });
+    }
+
     // Inline edit for title / filePath
     el.querySelectorAll('.editable-meta').forEach(span => {
       span.addEventListener('mousedown', e => e.stopPropagation());
@@ -853,7 +891,7 @@ function viewHTML(n, codeHtml) {
   <div class="node-header">
     ${metaHtml}
     <div class="node-actions">
-      <span class="lang-badge">${esc(n.lang)}</span>
+      <button class="node-btn btn-fetch-git">⬇ Git取得</button>
       <label class="ln-toggle" title="行番号を表示/非表示"><input type="checkbox" class="ln-cb"${n.showLineNumbers ? ' checked' : ''}> 行番号</label>
       <button class="node-btn btn-edit">編集</button>
       <button class="node-btn danger btn-del">✕</button>
@@ -1550,6 +1588,14 @@ document.addEventListener('mouseup', () => {
 }, true);
 
 // ═══════════════════════════════════════════════════════
+// GIT UTILITIES
+// ═══════════════════════════════════════════════════════
+function parseGitHubUrl(url) {
+  const m = url.trim().match(/github\.com[:/]([^/]+)\/([^/.?\s]+)/);
+  return m ? { owner: m[1], repo: m[2] } : null;
+}
+
+// ═══════════════════════════════════════════════════════
 // GIT CONFIG DIALOG
 // ═══════════════════════════════════════════════════════
 (function () {
@@ -1579,12 +1625,6 @@ document.addEventListener('mouseup', () => {
   function setNote(msg, type) {
     noteEl.textContent = msg;
     noteEl.className = 'git-form-note' + (type ? ' ' + type : '');
-  }
-
-  // Parse GitHub URL → { owner, repo } or null
-  function parseGitHubUrl(url) {
-    const m = url.trim().match(/github\.com[:/]([^/]+)\/([^/.?\s]+)/);
-    return m ? { owner: m[1], repo: m[2] } : null;
   }
 
   // Resolve branch HEAD commit hash via GitHub API
@@ -1674,6 +1714,104 @@ document.addEventListener('mouseup', () => {
   });
 
   document.getElementById('btn-git-config').addEventListener('click', openDialog);
+})();
+
+// ═══════════════════════════════════════════════════════
+// GIT SNIPPET FETCH DIALOG
+// ═══════════════════════════════════════════════════════
+(function () {
+  const overlay   = document.getElementById('fetch-dialog-overlay');
+  const infoEl    = document.getElementById('fetch-git-info');
+  const pathEl    = document.getElementById('fetch-path');
+  const startEl   = document.getElementById('fetch-start');
+  const endEl     = document.getElementById('fetch-end');
+  const noteEl    = document.getElementById('fetch-note');
+  const okBtn     = document.getElementById('fetch-ok');
+  const cancelBtn = document.getElementById('fetch-cancel');
+  let targetNodeId = null;
+
+  function setNote(msg, type) {
+    noteEl.textContent = msg;
+    noteEl.className = 'git-form-note' + (type ? ' ' + type : '');
+  }
+
+  function close() { overlay.style.display = 'none'; }
+
+  window.openFetchDialog = function (nodeId) {
+    targetNodeId = nodeId;
+    const n = S.nodes.find(n => n.id === nodeId);
+    pathEl.value  = n?.filePath ?? '';
+    startEl.value = '';
+    endEl.value   = '';
+    setNote('', '');
+
+    const gc = S.gitConfig;
+    if (gc.url) {
+      const ref = gc.commitHash ? gc.commitHash.slice(0, 12) + '…'
+                : gc.branch     ? `branch: ${gc.branch}`
+                : gc.tag        ? `tag: ${gc.tag}`
+                : '(ref未設定)';
+      infoEl.textContent = `${gc.url}  /  ${ref}`;
+      infoEl.className = 'git-form-note ok';
+    } else {
+      infoEl.textContent = '⚠ Git設定が未設定です。ツールバーの「⎇ Git設定」から先に設定してください。';
+      infoEl.className = 'git-form-note warn';
+    }
+
+    overlay.style.display = 'flex';
+    pathEl.focus();
+  };
+
+  okBtn.addEventListener('click', async () => {
+    const gc = S.gitConfig;
+    if (!gc.url) { setNote('⚠ Git設定でリポジトリURLを設定してください。', 'err'); return; }
+    const gh = parseGitHubUrl(gc.url);
+    if (!gh) { setNote('⚠ GitHub URL のみ対応しています。', 'err'); return; }
+    const ref = gc.commitHash || gc.branch || gc.tag;
+    if (!ref) { setNote('⚠ Git設定でブランチ、タグ、またはcommit hashを設定してください。', 'err'); return; }
+
+    const filePath  = pathEl.value.trim();
+    const startLine = parseInt(startEl.value, 10);
+    const endLine   = parseInt(endEl.value, 10);
+    if (!filePath)                          { setNote('⚠ 相対パスを入力してください。', 'err'); return; }
+    if (isNaN(startLine) || startLine < 1)  { setNote('⚠ 開始行番号を正しく入力してください。', 'err'); return; }
+    if (isNaN(endLine) || endLine < startLine) { setNote('⚠ 終了行番号は開始行番号以上にしてください。', 'err'); return; }
+
+    okBtn.disabled = true;
+    setNote('⏳ 取得中…', '');
+    try {
+      const cleanPath = filePath.replace(/^\//, '');
+      const rawUrl = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${ref}/${cleanPath}`;
+      const res = await fetch(rawUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      const text  = await res.text();
+      const lines = text.split('\n');
+      const sliced = lines.slice(startLine - 1, endLine);
+      // Trim trailing empty line if the file ends with \n
+      if (sliced.length > 0 && sliced[sliced.length - 1] === '') sliced.pop();
+      const code = sliced.join('\n');
+
+      const n = S.nodes.find(n => n.id === targetNodeId);
+      if (!n) { setNote('⚠ ノードが見つかりません。', 'err'); okBtn.disabled = false; return; }
+      n.code            = code;
+      n.filePath        = filePath;
+      n.lineNumberStart = startLine;
+      n.showLineNumbers = true;
+      renderNode(n, ndEl(n.id));
+      scheduleSave();
+      setNote(`✓ ${sliced.length} 行を取得しました。`, 'ok');
+      setTimeout(close, 900);
+    } catch (e) {
+      setNote(`✗ 取得失敗: ${e.message}`, 'err');
+    }
+    okBtn.disabled = false;
+  });
+
+  cancelBtn.addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && overlay.style.display !== 'none') close();
+  });
 })();
 
 // Export
