@@ -663,7 +663,7 @@ function addNode(x, y, code) {
     code: code ?? defaultCode(),
     lang: 'javascript',
     title: '', filePath: '',
-    showLineNumbers: false, lineNumberStart: 1,
+    showLineNumbers: true, lineNumberStart: 1,
   };
   S.nodes.push(n);
   const el = document.createElement('div');
@@ -1514,7 +1514,7 @@ function loadState(data) {
   S.links = data.links ?? [];
 
   for (const nd of (data.nodes ?? [])) {
-    const n = { id: nd.id, x: nd.x, y: nd.y, w: nd.w, h: nd.h, code: nd.code, lang: nd.lang ?? 'text', title: nd.title ?? '', filePath: nd.filePath ?? '', showLineNumbers: nd.showLineNumbers ?? false, lineNumberStart: nd.lineNumberStart ?? 1 };
+    const n = { id: nd.id, x: nd.x, y: nd.y, w: nd.w, h: nd.h, code: nd.code, lang: nd.lang ?? 'text', title: nd.title ?? '', filePath: nd.filePath ?? '', showLineNumbers: nd.showLineNumbers ?? true, lineNumberStart: nd.lineNumberStart ?? 1 };
     S.nodes.push(n);
     const el = document.createElement('div');
     el.className = 'node';
