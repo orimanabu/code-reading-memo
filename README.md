@@ -27,6 +27,7 @@
 | `nid` | number | 次に割り当てるノードIDのカウンタ |
 | `lid` | number | 次に割り当てるリンクIDのカウンタ |
 | `vp` | Viewport | ビューポートの状態 |
+| `gitConfig` | GitConfig | キャンバスに紐付くGitリポジトリの設定 |
 
 ## Node オブジェクト
 
@@ -41,6 +42,8 @@
 | `lang` | string | 言語（自動判定結果。例: `"cpp"`, `"rust"`） |
 | `title` | string | コードブロックのタイトル |
 | `filePath` | string | コードが載っているファイルのパス |
+| `showLineNumbers` | boolean | 行番号を表示するか（デフォルト: `true`） |
+| `lineNumberStart` | number | 先頭行に表示する行番号（デフォルト: `1`） |
 
 ## Link オブジェクト
 
@@ -59,6 +62,20 @@
 | `y` | number | ビューポートのY座標オフセット |
 | `scale` | number | ズーム倍率 |
 
+## GitConfig オブジェクト
+
+キャンバス全体に紐付くGitリポジトリの情報。ツールバーの「⎇ Git設定」ボタンから設定する。
+GitHubのURLを指定した場合、ブランチ名またはタグ名からcommit hashをGitHub APIで自動解決する。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `url` | string | リポジトリのURL（例: `"https://github.com/owner/repo"`） |
+| `branch` | string | ブランチ名（例: `"main"`）。指定時はそのブランチのHEAD commitを使用 |
+| `tag` | string | タグ名（例: `"v1.0.0"`）。指定時はそのタグのcommitを使用 |
+| `commitHash` | string | commit hash。ブランチ/タグ指定時はGitHub APIで自動解決される |
+
+`branch` と `tag` はどちらか一方を指定する。両方省略した場合は `commitHash` をそのまま使用する。
+
 ## サンプル
 
 ```json
@@ -74,7 +91,9 @@
       "code": "static int\ninit_container (...) { ... }",
       "lang": "cpp",
       "title": "init_container()",
-      "filePath": "src/libcrun/linux.c"
+      "filePath": "src/libcrun/linux.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1
     }
   ],
   "links": [
@@ -91,6 +110,12 @@
     "x": 76.9,
     "y": -6.8,
     "scale": 0.7
+  },
+  "gitConfig": {
+    "url": "https://github.com/containers/crun",
+    "branch": "main",
+    "tag": "",
+    "commitHash": "a1b2c3d4e5f6..."
   }
 }
 ```
