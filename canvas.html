@@ -296,6 +296,14 @@ body.link-mode .node:hover {
 .ln-toggle input[type=checkbox] { margin: 0; cursor: pointer; accent-color: #388bfd; }
 .ln-toggle:hover { color: #8b949e; }
 
+/* ── Inline editable meta (title / filepath) ── */
+.node-title.editable-meta,
+.node-filepath.editable-meta { cursor: text; }
+.node-title.editable-meta:hover { filter: brightness(1.25); }
+.node-filepath.editable-meta:hover { filter: brightness(1.25); }
+.node-title.meta-empty  { opacity: 0.28; font-weight: 400; font-style: italic; }
+.node-filepath.meta-empty { opacity: 0.28; font-style: italic; }
+
 /* ── Git Config Dialog ── */
 #git-dialog-overlay {
   position: fixed; inset: 0; z-index: 500;
@@ -730,6 +738,40 @@ function renderNode(n, el) {
       });
     });
 
+    // Inline edit for title / filePath
+    el.querySelectorAll('.editable-meta').forEach(span => {
+      span.addEventListener('mousedown', e => e.stopPropagation());
+      span.addEventListener('click', e => {
+        e.stopPropagation();
+        const field = span.dataset.field; // 'title' or 'filePath'
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = n[field];
+        inp.className = field === 'filePath' ? 'inp-filepath' : 'inp-title';
+        inp.placeholder = field === 'filePath' ? 'ファイルパス (例: src/utils/helper.ts)' : 'タイトル';
+        inp.spellcheck = false;
+        span.replaceWith(inp);
+        inp.focus(); inp.select();
+        let committed = false;
+        const commit = () => {
+          if (committed) return; committed = true;
+          n[field] = inp.value.trim();
+          if (field === 'filePath') {
+            const extLang = langFromPath(n.filePath);
+            if (extLang) n.lang = extLang;
+          }
+          renderNode(n, el);
+          scheduleSave();
+        };
+        inp.addEventListener('blur', commit);
+        inp.addEventListener('keydown', ev => {
+          if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); }
+          if (ev.key === 'Escape') { committed = true; renderNode(n, el); }
+        });
+        inp.addEventListener('mousedown', ev => ev.stopPropagation());
+      });
+    });
+
     // Line-number checkbox
     const lnCb = el.querySelector('.ln-cb');
     if (lnCb) {
@@ -801,11 +843,9 @@ function editHTML(n) {
 }
 
 function viewHTML(n, codeHtml) {
-  const metaHtml = (n.title || n.filePath) ? `
-    <div class="node-meta">
-      ${n.title    ? `<span class="node-title">${esc(n.title)}</span>` : ''}
-      ${n.filePath ? `<span class="node-filepath">${esc(n.filePath)}</span>` : ''}
-    </div>` : '<div class="node-meta"></div>';
+  const titleSpan    = `<span class="node-title editable-meta${n.title ? '' : ' meta-empty'}" data-field="title">${n.title ? esc(n.title) : 'タイトル…'}</span>`;
+  const filepathSpan = `<span class="node-filepath editable-meta${n.filePath ? '' : ' meta-empty'}" data-field="filePath">${n.filePath ? esc(n.filePath) : 'ファイルパス…'}</span>`;
+  const metaHtml = `<div class="node-meta">${titleSpan}${filepathSpan}</div>`;
   const bodyHtml = n.showLineNumbers
     ? `<pre class="has-ln"><code class="hljs">${addLineNumbers(codeHtml, n.lineNumberStart ?? 1)}</code></pre>`
     : `<pre><code class="hljs">${codeHtml}</code></pre>`;
