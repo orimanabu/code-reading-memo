@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,19 +12,19 @@
 
 <div id="toolbar">
   <span class="logo">∞</span>
-  <input id="canvas-title" placeholder="キャンバスのタイトル" spellcheck="false">
+  <input id="canvas-title" placeholder="Canvas title" spellcheck="false">
   <div class="sep"></div>
-  <button class="tb-btn" id="btn-add">＋ ブロック追加</button>
-  <button class="tb-btn" id="btn-add-bubble">💬 吹き出し</button>
+  <button class="tb-btn" id="btn-add">+ Add Block</button>
+  <button class="tb-btn" id="btn-add-bubble">💬 Bubble</button>
   <div class="sep"></div>
-  <button class="tb-btn" id="btn-git-config">⎇ Git設定</button>
+  <button class="tb-btn" id="btn-git-config">⎇ Git Config</button>
   <div class="sep"></div>
-  <button class="tb-btn" id="btn-export">↓ エクスポート</button>
-  <label class="tb-btn" id="btn-import-label" style="cursor:pointer;">↑ インポート<input type="file" id="btn-import" accept=".json" style="display:none;"></label>
-  <button class="tb-btn danger" id="btn-clear">🗑 クリア</button>
+  <button class="tb-btn" id="btn-export">↓ Export</button>
+  <label class="tb-btn" id="btn-import-label" style="cursor:pointer;">↑ Import<input type="file" id="btn-import" accept=".json" style="display:none;"></label>
+  <button class="tb-btn danger" id="btn-clear">🗑 Clear</button>
   <div class="sep"></div>
   <span id="mode-indicator">SELECT</span>
-  <span class="hint">v: 選択 &nbsp;|&nbsp; h: ハンド &nbsp;|&nbsp; Shift+クリック: 複数選択 &nbsp;|&nbsp; Cmd/Ctrl+C/X/V: コピー/カット/ペースト &nbsp;|&nbsp; Del: 削除 &nbsp;|&nbsp; Ctrl/Cmd+ドラッグ: ズーム &nbsp;|&nbsp; ダブルクリック: ブロック追加 &nbsp;|&nbsp; テキスト選択 → リンク</span>
+  <span class="hint">v: select &nbsp;|&nbsp; h: hand &nbsp;|&nbsp; Shift+click: multi-select &nbsp;|&nbsp; Cmd/Ctrl+C/X/V: copy/cut/paste &nbsp;|&nbsp; Del: delete &nbsp;|&nbsp; Ctrl/Cmd+drag: zoom &nbsp;|&nbsp; double-click: add block &nbsp;|&nbsp; select text → link</span>
 </div>
 
 <div id="wrap">
@@ -41,35 +41,35 @@
 <!-- Git Config Dialog -->
 <div id="git-dialog-overlay" style="display:none;">
   <div class="git-dialog">
-    <div class="git-dialog-title">⎇ Git リポジトリ設定</div>
+    <div class="git-dialog-title">⎇ Git Repository Settings</div>
 
     <div class="git-form-row">
-      <label class="git-form-label" for="git-url">リポジトリ URL</label>
+      <label class="git-form-label" for="git-url">Repository URL</label>
       <input class="git-form-input" id="git-url" type="url" placeholder="https://github.com/owner/repo" spellcheck="false" autocomplete="off">
     </div>
 
     <div class="git-form-row">
-      <label class="git-form-label" for="git-branch">ブランチ名</label>
+      <label class="git-form-label" for="git-branch">Branch name</label>
       <input class="git-form-input" id="git-branch" type="text" placeholder="main" spellcheck="false" autocomplete="off">
     </div>
 
-    <div class="git-form-divider">または</div>
+    <div class="git-form-divider">or</div>
 
     <div class="git-form-row">
-      <label class="git-form-label" for="git-tag">タグ名</label>
+      <label class="git-form-label" for="git-tag">Tag name</label>
       <input class="git-form-input" id="git-tag" type="text" placeholder="v1.0.0" spellcheck="false" autocomplete="off">
     </div>
 
     <div class="git-form-row">
-      <label class="git-form-label" for="git-commit">Commit Hash <span style="color:#484f58;font-weight:400;">(省略可 — ブランチ/タグから自動解決)</span></label>
-      <input class="git-form-input" id="git-commit" type="text" placeholder="自動解決" spellcheck="false" autocomplete="off">
+      <label class="git-form-label" for="git-commit">Commit Hash <span style="color:#484f58;font-weight:400;">(optional — auto-resolved from branch/tag)</span></label>
+      <input class="git-form-input" id="git-commit" type="text" placeholder="auto-resolved" spellcheck="false" autocomplete="off">
     </div>
 
     <div class="git-form-note" id="git-resolve-note"></div>
 
     <div class="git-form-buttons">
-      <button class="tb-btn" id="git-cancel">キャンセル</button>
-      <button class="git-btn-save" id="git-save">保存</button>
+      <button class="tb-btn" id="git-cancel">Cancel</button>
+      <button class="git-btn-save" id="git-save">Save</button>
     </div>
   </div>
 </div>
@@ -77,20 +77,20 @@
 <!-- Git Snippet Fetch Dialog -->
 <div id="fetch-dialog-overlay" style="display:none;">
   <div class="git-dialog">
-    <div class="git-dialog-title">⬇ Gitからコードスニペットを取得</div>
+    <div class="git-dialog-title">⬇ Fetch Code Snippet from Git</div>
     <div class="git-form-note" id="fetch-git-info" style="margin-bottom:16px;"></div>
 
     <div class="git-form-row">
-      <label class="git-form-label" for="fetch-path">相対パス</label>
+      <label class="git-form-label" for="fetch-path">Relative path</label>
       <input class="git-form-input" id="fetch-path" type="text" placeholder="src/foo/bar.c" spellcheck="false" autocomplete="off">
     </div>
     <div style="display:flex;gap:12px;">
       <div class="git-form-row" style="flex:1;">
-        <label class="git-form-label" for="fetch-start">開始行番号</label>
+        <label class="git-form-label" for="fetch-start">Start line</label>
         <input class="git-form-input" id="fetch-start" type="number" placeholder="1" min="1">
       </div>
       <div class="git-form-row" style="flex:1;">
-        <label class="git-form-label" for="fetch-end">終了行番号</label>
+        <label class="git-form-label" for="fetch-end">End line</label>
         <input class="git-form-input" id="fetch-end" type="number" placeholder="50" min="1">
       </div>
     </div>
@@ -98,14 +98,14 @@
     <div class="git-form-note" id="fetch-note"></div>
 
     <div class="git-form-buttons">
-      <button class="tb-btn" id="fetch-cancel">キャンセル</button>
-      <button class="git-btn-save" id="fetch-ok">取得</button>
+      <button class="tb-btn" id="fetch-cancel">Cancel</button>
+      <button class="git-btn-save" id="fetch-ok">Fetch</button>
     </div>
   </div>
 </div>
 
-<div id="link-tip">🔗 ここからリンクを作成</div>
-<div id="status">準備完了</div>
+<div id="link-tip">🔗 Create link from here</div>
+<div id="status">Ready</div>
 
 <script src="canvas.js"></script>
 </body>

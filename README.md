@@ -1,100 +1,100 @@
-# 概要
+# Overview
 
-ブラウザ上で動くコード読解支援ツールです。無限キャンバス上でコードスニペットを視覚的に整理・関連付けできます。
+A browser-based tool for reading and understanding source code. Visually organize and connect code snippets on an infinite canvas.
 
 ![screenshot1](images/screenshot-1.png)
 
 ![screenshot2](images/screenshot-2.png)
 
-# 主な機能
+# Features
 
-- コードブロック: 矩形の中にコードを配置。タイトル・ファイルパスも記載可能
-- シンタックスハイライト: コードの内容から言語を自動判定してハイライト
-- リンク機能: コードブロック内の文字列（関数名など）を選択して、別のコードブロックと線でつなぐ。クリックでジャンプも可能
-- 無限キャンバス: Miro風の操作感（ドラッグでスクロール、Cmd+ドラッグでズーム、v/hでモード切替）
-- 保存/読み込み: JSON形式でエクスポート・インポート
+- **Code blocks**: Place code inside resizable rectangles. Each block can have a title and file path.
+- **Syntax highlighting**: Language is auto-detected from the code content and highlighted accordingly.
+- **Links**: Select a string (e.g. a function name) inside a code block and connect it to another block with an arrow. Click to jump to the target.
+- **Infinite canvas**: Miro-style navigation (drag to pan, Cmd+drag to zoom, v/h to switch modes).
+- **Save / Load**: Export and import as JSON.
 
 
-# JSON出力フォーマット
+# JSON Output Format
 
-## トップレベル
+## Top level
 
-| フィールド | 型 | 説明 |
+| Field | Type | Description |
 |---|---|---|
-| `canvasTitle` | string | キャンバス全体のタイトル |
-| `nodes` | Node[] | コードブロックの配列 |
-| `links` | Link[] | リンクの配列 |
-| `nid` | number | 次に割り当てるノードIDのカウンタ |
-| `lid` | number | 次に割り当てるリンクIDのカウンタ |
-| `vp` | Viewport | ビューポートの状態 |
-| `gitConfig` | GitConfig | キャンバスに紐付くGitリポジトリの設定 |
+| `canvasTitle` | string | Title of the entire canvas |
+| `nodes` | Node[] | Array of code blocks |
+| `links` | Link[] | Array of links |
+| `nid` | number | Counter for the next node ID to assign |
+| `lid` | number | Counter for the next link ID to assign |
+| `vp` | Viewport | Viewport state |
+| `gitConfig` | GitConfig | Git repository settings associated with the canvas |
 
-## Node オブジェクト（コードブロック）
+## Node object (code block)
 
-`type` フィールドが存在しない、または `"code"` の場合はコードブロック。
+A node is a code block when the `type` field is absent or `"code"`.
 
-| フィールド | 型 | 説明 |
+| Field | Type | Description |
 |---|---|---|
-| `id` | number | ノードの一意なID |
-| `x` | number | キャンバス上のX座標 |
-| `y` | number | キャンバス上のY座標 |
-| `w` | number | 矩形の幅 |
-| `h` | number | 矩形の高さ |
-| `code` | string | コードの本文 |
-| `lang` | string | 言語（自動判定結果。例: `"cpp"`, `"rust"`） |
-| `title` | string | コードブロックのタイトル |
-| `filePath` | string | コードが載っているファイルのパス |
-| `showLineNumbers` | boolean | 行番号を表示するか（デフォルト: `true`） |
-| `lineNumberStart` | number | 先頭行に表示する行番号（デフォルト: `1`） |
+| `id` | number | Unique node ID |
+| `x` | number | X coordinate on the canvas |
+| `y` | number | Y coordinate on the canvas |
+| `w` | number | Width of the rectangle |
+| `h` | number | Height of the rectangle |
+| `code` | string | Code content |
+| `lang` | string | Language (auto-detected result, e.g. `"cpp"`, `"rust"`) |
+| `title` | string | Title of the code block |
+| `filePath` | string | Path of the file the code belongs to |
+| `showLineNumbers` | boolean | Whether to show line numbers (default: `true`) |
+| `lineNumberStart` | number | Line number shown at the first line (default: `1`) |
 
-## Node オブジェクト（吹き出し）
+## Node object (bubble)
 
-`type` が `"bubble"` の場合は吹き出しノード。
+A node is a bubble when `type` is `"bubble"`.
 
-| フィールド | 型 | 説明 |
+| Field | Type | Description |
 |---|---|---|
-| `id` | number | ノードの一意なID |
-| `type` | string | `"bubble"` 固定 |
-| `x` | number | キャンバス上のX座標（吹き出し本体の左上） |
-| `y` | number | キャンバス上のY座標（吹き出し本体の左上） |
-| `w` | number | 吹き出し本体の幅 |
-| `h` | number | 吹き出し本体の高さ |
-| `text` | string | 吹き出し内のテキスト |
-| `tailX` | number | しっぽ先端のキャンバス上X座標（本体と独立して移動可能） |
-| `tailY` | number | しっぽ先端のキャンバス上Y座標（本体と独立して移動可能） |
+| `id` | number | Unique node ID |
+| `type` | string | Fixed value `"bubble"` |
+| `x` | number | X coordinate of the bubble body's top-left corner |
+| `y` | number | Y coordinate of the bubble body's top-left corner |
+| `w` | number | Width of the bubble body |
+| `h` | number | Height of the bubble body |
+| `text` | string | Text inside the bubble |
+| `tailX` | number | X coordinate of the tail tip on the canvas (movable independently of the body) |
+| `tailY` | number | Y coordinate of the tail tip on the canvas (movable independently of the body) |
 
-## Link オブジェクト
+## Link object
 
-| フィールド | 型 | 説明 |
+| Field | Type | Description |
 |---|---|---|
-| `id` | number | リンクの一意なID |
-| `fromId` | number | リンク元ノードのID |
-| `text` | string | リンク元で選択した文字列（アンカーテキスト） |
-| `toId` | number | リンク先ノードのID |
+| `id` | number | Unique link ID |
+| `fromId` | number | ID of the source node |
+| `text` | string | Text selected in the source node (anchor text) |
+| `toId` | number | ID of the target node |
 
-## Viewport オブジェクト
+## Viewport object
 
-| フィールド | 型 | 説明 |
+| Field | Type | Description |
 |---|---|---|
-| `x` | number | ビューポートのX座標オフセット |
-| `y` | number | ビューポートのY座標オフセット |
-| `scale` | number | ズーム倍率 |
+| `x` | number | X offset of the viewport |
+| `y` | number | Y offset of the viewport |
+| `scale` | number | Zoom level |
 
-## GitConfig オブジェクト
+## GitConfig object
 
-キャンバス全体に紐付くGitリポジトリの情報。ツールバーの「⎇ Git設定」ボタンから設定する。
-GitHubのURLを指定した場合、ブランチ名またはタグ名からcommit hashをGitHub APIで自動解決する。
+Git repository information associated with the entire canvas. Configured via the "⎇ Git Config" button in the toolbar.
+When a GitHub URL is provided, the commit hash is auto-resolved from the branch or tag name via the GitHub API.
 
-| フィールド | 型 | 説明 |
+| Field | Type | Description |
 |---|---|---|
-| `url` | string | リポジトリのURL（例: `"https://github.com/owner/repo"`） |
-| `branch` | string | ブランチ名（例: `"main"`）。指定時はそのブランチのHEAD commitを使用 |
-| `tag` | string | タグ名（例: `"v1.0.0"`）。指定時はそのタグのcommitを使用 |
-| `commitHash` | string | commit hash。ブランチ/タグ指定時はGitHub APIで自動解決される |
+| `url` | string | Repository URL (e.g. `"https://github.com/owner/repo"`) |
+| `branch` | string | Branch name (e.g. `"main"`). When set, uses the HEAD commit of that branch. |
+| `tag` | string | Tag name (e.g. `"v1.0.0"`). When set, uses the commit of that tag. |
+| `commitHash` | string | Commit hash. Auto-resolved via the GitHub API when a branch/tag is specified. |
 
-`branch` と `tag` はどちらか一方を指定する。両方省略した場合は `commitHash` をそのまま使用する。
+Specify either `branch` or `tag`, but not both. If both are omitted, `commitHash` is used as-is.
 
-## サンプル
+## Sample
 
 ```json
 {
@@ -120,7 +120,7 @@ GitHubのURLを指定した場合、ブランチ名またはタグ名からcommi
       "y": 100.0,
       "w": 200,
       "h": 80,
-      "text": "ここで名前空間を初期化している",
+      "text": "Namespaces are initialized here",
       "tailX": 250.0,
       "tailY": 220.0
     }

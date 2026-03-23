@@ -82,7 +82,7 @@ function zoom(factor, mx, my) {
   S.vp.y  = my - (my - S.vp.y) * r;
   S.vp.scale = ns;
   applyVP();
-  setStatus(`ズーム: ${Math.round(ns * 100)}%`);
+  setStatus(`Zoom: ${Math.round(ns * 100)}%`);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -130,7 +130,7 @@ const EXT_LANG = {
 function langFromPath(filePath) {
   if (!filePath) return null;
   const base = filePath.split('/').pop();
-  // Dockerfile, Makefile などの拡張子なしファイル名
+  // Files without extension, e.g. Dockerfile, Makefile
   const nameLower = base.toLowerCase();
   if (nameLower === 'dockerfile') return 'dockerfile';
   if (nameLower === 'makefile')   return 'makefile';
@@ -244,7 +244,7 @@ function addNode(x, y, code) {
 }
 
 function defaultCode() {
-  return `// 新しいコードブロック\nfunction greet(name) {\n  return \`Hello, \${name}!\`;\n}\n\nconsole.log(greet('World'));`;
+  return `// New code block\nfunction greet(name) {\n  return \`Hello, \${name}!\`;\n}\n\nconsole.log(greet('World'));`;
 }
 
 function renderNode(n, el) {
@@ -300,7 +300,7 @@ function renderNode(n, el) {
         const lnk = S.links.find(l => l.id === +a.dataset.lid);
         if (!lnk) return;
         if (e.altKey || e.metaKey) {
-          if (confirm(`リンク "${lnk.text}" を削除しますか？`)) removeLink(lnk.id);
+          if (confirm(`Delete link "${lnk.text}"?`)) removeLink(lnk.id);
         } else {
           jumpTo(lnk.toId);
         }
@@ -324,7 +324,7 @@ function renderNode(n, el) {
         inp.type = 'text';
         inp.value = n[field];
         inp.className = field === 'filePath' ? 'inp-filepath' : 'inp-title';
-        inp.placeholder = field === 'filePath' ? 'ファイルパス (例: src/utils/helper.ts)' : 'タイトル';
+        inp.placeholder = field === 'filePath' ? 'File path (e.g. src/utils/helper.ts)' : 'Title';
         inp.spellcheck = false;
         span.replaceWith(inp);
         inp.focus(); inp.select();
@@ -405,11 +405,11 @@ function renderNode(n, el) {
 function bubbleViewHTML(n) {
   const body = n.text
     ? `<div class="bubble-text">${esc(n.text).replace(/\n/g, '<br>')}</div>`
-    : `<div class="bubble-text empty">テキストを入力…</div>`;
+    : `<div class="bubble-text empty">Enter text…</div>`;
   return `
   <div class="bubble-header">
     <div class="node-actions">
-      <button class="node-btn btn-edit">編集</button>
+      <button class="node-btn btn-edit">Edit</button>
       <button class="node-btn danger btn-del">✕</button>
     </div>
   </div>
@@ -421,8 +421,8 @@ function bubbleEditHTML(n) {
   return `
   <div class="bubble-header">
     <div class="node-actions" style="opacity:1">
-      <button class="node-btn btn-done">✓ 完了</button>
-      <button class="node-btn danger btn-del">削除</button>
+      <button class="node-btn btn-done">✓ Done</button>
+      <button class="node-btn danger btn-del">Delete</button>
     </div>
   </div>
   <div class="bubble-body">
@@ -586,13 +586,13 @@ function editHTML(n) {
   return `
   <div class="node-header">
     <div class="node-meta">
-      <input class="inp-title" placeholder="タイトル" value="${esc(n.title ?? '')}" spellcheck="false">
-      <input class="inp-filepath" placeholder="ファイルパス (例: src/utils/helper.ts)" value="${esc(n.filePath ?? '')}" spellcheck="false">
+      <input class="inp-title" placeholder="Title" value="${esc(n.title ?? '')}" spellcheck="false">
+      <input class="inp-filepath" placeholder="File path (e.g. src/utils/helper.ts)" value="${esc(n.filePath ?? '')}" spellcheck="false">
     </div>
     <div class="node-actions" style="opacity:1">
       <span class="lang-badge">${esc(n.lang)}</span>
-      <button class="node-btn btn-done">✓ 完了</button>
-      <button class="node-btn danger btn-del">削除</button>
+      <button class="node-btn btn-done">✓ Done</button>
+      <button class="node-btn danger btn-del">Delete</button>
     </div>
   </div>
   <div class="node-body">
@@ -602,8 +602,8 @@ function editHTML(n) {
 }
 
 function viewHTML(n, codeHtml) {
-  const titleSpan    = `<span class="node-title editable-meta${n.title ? '' : ' meta-empty'}" data-field="title">${n.title ? esc(n.title) : 'タイトル…'}</span>`;
-  const filepathSpan = `<span class="node-filepath editable-meta${n.filePath ? '' : ' meta-empty'}" data-field="filePath">${n.filePath ? esc(n.filePath) : 'ファイルパス…'}</span>`;
+  const titleSpan    = `<span class="node-title editable-meta${n.title ? '' : ' meta-empty'}" data-field="title">${n.title ? esc(n.title) : 'Title…'}</span>`;
+  const filepathSpan = `<span class="node-filepath editable-meta${n.filePath ? '' : ' meta-empty'}" data-field="filePath">${n.filePath ? esc(n.filePath) : 'File path…'}</span>`;
   const metaHtml = `<div class="node-meta">${titleSpan}${filepathSpan}</div>`;
   const bodyHtml = n.showLineNumbers
     ? `<pre class="has-ln"><code class="hljs">${addLineNumbers(codeHtml, n.lineNumberStart ?? 1)}</code></pre>`
@@ -612,9 +612,9 @@ function viewHTML(n, codeHtml) {
   <div class="node-header">
     ${metaHtml}
     <div class="node-actions">
-      <button class="node-btn btn-fetch-git">⬇ Git取得</button>
-      <label class="ln-toggle" title="行番号を表示/非表示"><input type="checkbox" class="ln-cb"${n.showLineNumbers ? ' checked' : ''}> 行番号</label>
-      <button class="node-btn btn-edit">編集</button>
+      <button class="node-btn btn-fetch-git">⬇ Fetch</button>
+      <label class="ln-toggle" title="Show/hide line numbers"><input type="checkbox" class="ln-cb"${n.showLineNumbers ? ' checked' : ''}> Line Nos</label>
+      <button class="node-btn btn-edit">Edit</button>
       <button class="node-btn danger btn-del">✕</button>
     </div>
   </div>
@@ -663,7 +663,7 @@ function setupNodeEvents(n, el) {
         }
         toggleMultiSel(n.id);
         const count = S.multiSel.size;
-        setStatus(count > 0 ? `${count} 個のブロックを選択中 ─ ヘッダーをドラッグで一括移動` : '準備完了');
+        setStatus(count > 0 ? `${count} block(s) selected — drag header to move all` : 'Ready');
       }
       return;
     }
@@ -778,7 +778,7 @@ function copyNodes() {
     const n = S.nodes.find(nn => nn.id === id);
     return n ? { ...n } : null;
   }).filter(Boolean);
-  setStatus(`${S.clipboard.length} 個のブロックをコピーしました (Cmd/Ctrl+V でペースト)`);
+  setStatus(`${S.clipboard.length} block(s) copied (Cmd/Ctrl+V to paste)`);
 }
 
 function cutNodes() {
@@ -789,7 +789,7 @@ function cutNodes() {
     return n ? { ...n } : null;
   }).filter(Boolean);
   ids.forEach(id => removeNode(id));
-  setStatus(`${S.clipboard.length} 個のブロックをカットしました (Cmd/Ctrl+V でペースト)`);
+  setStatus(`${S.clipboard.length} block(s) cut (Cmd/Ctrl+V to paste)`);
 }
 
 function pasteNodes() {
@@ -815,7 +815,7 @@ function pasteNodes() {
   }
   // Shift clipboard so the next paste lands further offset
   S.clipboard = S.clipboard.map(d => ({ ...d, x: d.x + offset, y: d.y + offset }));
-  setStatus(`${S.clipboard.length} 個のブロックをペーストしました`);
+  setStatus(`${S.clipboard.length} block(s) pasted`);
   scheduleSave();
 }
 
@@ -835,7 +835,7 @@ function jumpTo(id) {
 function createLink(fromId, text, toId) {
   // avoid duplicate
   if (S.links.find(l => l.fromId === fromId && l.text === text && l.toId === toId)) {
-    setStatus(`⚠ "${text}" → このブロックへのリンクはすでに存在します`);
+    setStatus(`⚠ A link from "${text}" to this block already exists`);
     return;
   }
   S.links.push({ id: S.lid++, fromId, text, toId });
@@ -950,7 +950,7 @@ function enterLinkMode(fromId, text) {
   S.linkMode = true;
   S.pending = { fromId, text };
   document.body.classList.add('link-mode');
-  setStatus(`🔗 リンク先ブロックをクリック ─ "${text}" → ? (Esc でキャンセル)`);
+  setStatus(`🔗 Click the target block — "${text}" → ? (Esc to cancel)`);
 }
 
 function exitLinkMode() {
@@ -958,7 +958,7 @@ function exitLinkMode() {
   S.pending = null;
   document.body.classList.remove('link-mode');
   linkTip.style.display = 'none';
-  setStatus('準備完了');
+  setStatus('Ready');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1016,7 +1016,7 @@ wrap.addEventListener('mousedown', e => {
   if (onBg) {
     selectNode(null);
     clearMultiSel();
-    setStatus('準備完了');
+    setStatus('Ready');
     if (S.editing) stopEdit();
   }
 
@@ -1203,7 +1203,7 @@ document.addEventListener('keydown', e => {
     S.vp.y = wrap.clientHeight / 2 - 200;
     S.vp.scale = 1;
     applyVP();
-    setStatus('ズームリセット');
+    setStatus('Zoom reset');
   }
 });
 
@@ -1267,7 +1267,7 @@ function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
-    setStatus('⚠ 保存失敗: ' + e.message);
+    setStatus('⚠ Save failed: ' + e.message);
   }
 }
 
@@ -1325,7 +1325,7 @@ function restoreFromStorage() {
     loadState(JSON.parse(raw));
     return true;
   } catch (e) {
-    console.warn('復元失敗:', e);
+    console.warn('Restore failed:', e);
     return false;
   }
 }
@@ -1419,7 +1419,7 @@ function parseGitHubUrl(url) {
 
     // Warn if both branch and tag are filled
     if (branch && tag) {
-      setNote('⚠ ブランチ名とタグ名の両方が入力されています。どちらか一方を入力してください。', 'warn');
+      setNote('⚠ Both branch and tag are filled. Please specify only one.', 'warn');
       return;
     }
 
@@ -1428,22 +1428,22 @@ function parseGitHubUrl(url) {
       const gh = parseGitHubUrl(url);
       if (!gh) {
         // Not a GitHub URL — save without hash
-        setNote('GitHub URL ではないため commit hash の自動解決をスキップします。', 'warn');
+        setNote('Not a GitHub URL — skipping commit hash auto-resolution.', 'warn');
         applyAndSave(url, branch, tag, '');
         return;
       }
       saveBtn.disabled = true;
-      setNote('⏳ commit hash を解決中...', '');
+      setNote('⏳ Resolving commit hash...', '');
       try {
         if (branch) {
           commit = await resolveBranch(gh.owner, gh.repo, branch);
-          setNote(`✓ ${branch} の HEAD: ${commit.slice(0, 12)}…`, 'ok');
+          setNote(`✓ HEAD of ${branch}: ${commit.slice(0, 12)}…`, 'ok');
         } else {
           commit = await resolveTag(gh.owner, gh.repo, tag);
-          setNote(`✓ ${tag} の commit: ${commit.slice(0, 12)}…`, 'ok');
+          setNote(`✓ Commit for ${tag}: ${commit.slice(0, 12)}…`, 'ok');
         }
       } catch (e) {
-        setNote(`✗ 解決失敗: ${e.message}`, 'err');
+        setNote(`✗ Resolution failed: ${e.message}`, 'err');
         saveBtn.disabled = false;
         return;
       }
@@ -1457,7 +1457,7 @@ function parseGitHubUrl(url) {
     S.gitConfig = { url, branch, tag, commitHash };
     saveState();
     closeDialog();
-    setStatus('Git 設定を保存しました');
+    setStatus('Git settings saved');
   }
 
   cancelBtn.addEventListener('click', closeDialog);
@@ -1509,11 +1509,11 @@ document.getElementById('btn-git-config').addEventListener('click', openDialog);
       const ref = gc.commitHash ? gc.commitHash.slice(0, 12) + '…'
                 : gc.branch     ? `branch: ${gc.branch}`
                 : gc.tag        ? `tag: ${gc.tag}`
-                : '(ref未設定)';
+                : '(no ref set)';
       infoEl.textContent = `${gc.url}  /  ${ref}`;
       infoEl.className = 'git-form-note ok';
     } else {
-      infoEl.textContent = '⚠ Git設定が未設定です。ツールバーの「⎇ Git設定」から先に設定してください。';
+      infoEl.textContent = '⚠ Git settings not configured. Please set them via "⎇ Git Config" in the toolbar first.';
       infoEl.className = 'git-form-note warn';
     }
 
@@ -1523,21 +1523,21 @@ document.getElementById('btn-git-config').addEventListener('click', openDialog);
 
   okBtn.addEventListener('click', async () => {
     const gc = S.gitConfig;
-    if (!gc.url) { setNote('⚠ Git設定でリポジトリURLを設定してください。', 'err'); return; }
+    if (!gc.url) { setNote('⚠ Please set a repository URL in Git Config.', 'err'); return; }
     const gh = parseGitHubUrl(gc.url);
-    if (!gh) { setNote('⚠ GitHub URL のみ対応しています。', 'err'); return; }
+    if (!gh) { setNote('⚠ Only GitHub URLs are supported.', 'err'); return; }
     const ref = gc.commitHash || gc.branch || gc.tag;
-    if (!ref) { setNote('⚠ Git設定でブランチ、タグ、またはcommit hashを設定してください。', 'err'); return; }
+    if (!ref) { setNote('⚠ Please set a branch, tag, or commit hash in Git Config.', 'err'); return; }
 
     const filePath  = pathEl.value.trim();
     const startLine = parseInt(startEl.value, 10);
     const endLine   = parseInt(endEl.value, 10);
-    if (!filePath)                          { setNote('⚠ 相対パスを入力してください。', 'err'); return; }
-    if (isNaN(startLine) || startLine < 1)  { setNote('⚠ 開始行番号を正しく入力してください。', 'err'); return; }
-    if (isNaN(endLine) || endLine < startLine) { setNote('⚠ 終了行番号は開始行番号以上にしてください。', 'err'); return; }
+    if (!filePath)                          { setNote('⚠ Please enter a relative path.', 'err'); return; }
+    if (isNaN(startLine) || startLine < 1)  { setNote('⚠ Please enter a valid start line number.', 'err'); return; }
+    if (isNaN(endLine) || endLine < startLine) { setNote('⚠ End line must be ≥ start line.', 'err'); return; }
 
     okBtn.disabled = true;
-    setNote('⏳ 取得中…', '');
+    setNote('⏳ Fetching…', '');
     try {
       const cleanPath = filePath.replace(/^\//, '');
       const rawUrl = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${ref}/${cleanPath}`;
@@ -1551,17 +1551,17 @@ document.getElementById('btn-git-config').addEventListener('click', openDialog);
       const code = sliced.join('\n');
 
       const n = S.nodes.find(n => n.id === targetNodeId);
-      if (!n) { setNote('⚠ ノードが見つかりません。', 'err'); okBtn.disabled = false; return; }
+      if (!n) { setNote('⚠ Node not found.', 'err'); okBtn.disabled = false; return; }
       n.code            = code;
       n.filePath        = filePath;
       n.lineNumberStart = startLine;
       n.showLineNumbers = true;
       renderNode(n, ndEl(n.id));
       scheduleSave();
-      setNote(`✓ ${sliced.length} 行を取得しました。`, 'ok');
+      setNote(`✓ Fetched ${sliced.length} line(s).`, 'ok');
       setTimeout(close, 900);
     } catch (e) {
-      setNote(`✗ 取得失敗: ${e.message}`, 'err');
+      setNote(`✗ Fetch failed: ${e.message}`, 'err');
     }
     okBtn.disabled = false;
   });
@@ -1584,7 +1584,7 @@ document.getElementById('btn-export').addEventListener('click', () => {
   a.download = `code-canvas-${new Date().toISOString().slice(0,10)}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
-  setStatus('エクスポートしました');
+  setStatus('Exported');
 });
 
 // Import
@@ -1597,9 +1597,9 @@ document.getElementById('btn-import').addEventListener('change', e => {
       const data = JSON.parse(ev.target.result);
       loadState(data);
       localStorage.setItem(STORAGE_KEY, ev.target.result);
-      setStatus('インポートしました');
+      setStatus('Imported');
     } catch (err) {
-      alert('JSONの読み込みに失敗しました: ' + err.message);
+      alert('Failed to load JSON: ' + err.message);
     }
     e.target.value = '';
   };
@@ -1608,7 +1608,7 @@ document.getElementById('btn-import').addEventListener('change', e => {
 
 // Clear
 document.getElementById('btn-clear').addEventListener('click', () => {
-  if (!confirm('キャンバスをすべてクリアしますか？')) return;
+  if (!confirm('Clear the entire canvas?')) return;
   localStorage.removeItem(STORAGE_KEY);
   S.nodes.forEach(n => ndEl(n.id)?.remove());
   S.nodes = []; S.links = []; S.nid = 1; S.lid = 1;
@@ -1616,7 +1616,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   S.gitConfig = { url: '', branch: '', tag: '', commitHash: '' };
   svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
   svgLinks.querySelectorAll('[data-btail]').forEach(e => e.remove());
-  setStatus('クリアしました');
+  setStatus('Cleared');
 });
 
 // ═══════════════════════════════════════════════════════
@@ -1624,4 +1624,4 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 // ═══════════════════════════════════════════════════════
 restoreFromStorage();
 
-setStatus('準備完了 ─ ダブルクリックでブロック追加 | テキスト選択でリンク作成 | Alt+クリックでリンク削除');
+setStatus('Ready — double-click to add block | select text to create link | Alt+click to delete link');
