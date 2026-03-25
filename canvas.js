@@ -721,9 +721,37 @@ function stopEdit() {
   const id = S.editing;
   S.editing = null;
   const n = S.nodes.find(n => n.id === id);
-  if (n) renderNode(n);
+  if (n) { renderNode(n); autoFitNode(n); }
   renderLinks();
   scheduleSave();
+}
+
+// Resize a code node so all content is visible without scrolling.
+function autoFitNode(n) {
+  const el = ndEl(n.id);
+  if (!el) return;
+  const header = el.querySelector('.node-header');
+  const pre    = el.querySelector('.node-body pre');
+  if (!pre) return;
+
+  // Step 1: measure natural (unwrapped) width.
+  // Temporarily disable wrapping so the pre expands to its longest line.
+  const codeLines = pre.querySelectorAll('.code-line');
+  pre.style.whiteSpace = 'pre';
+  codeLines.forEach(l => { l.style.whiteSpace = 'pre'; });
+  el.style.width = 'max-content';
+  // box-sizing: border-box, so offsetWidth == CSS width value
+  const naturalW = Math.max(250, el.offsetWidth);
+  pre.style.whiteSpace = '';
+  codeLines.forEach(l => { l.style.whiteSpace = ''; });
+  n.w = naturalW;
+  el.style.width = naturalW + 'px';
+
+  // Step 2: measure height at the new width (wrap may reflow lines).
+  const headerH = header ? header.offsetHeight : 40;
+  const newH    = Math.max(120, headerH + pre.scrollHeight + 2);
+  n.h = newH;
+  el.style.height = newH + 'px';
 }
 
 function selectNode(id) {
@@ -1557,6 +1585,7 @@ document.getElementById('btn-git-config').addEventListener('click', openDialog);
       n.lineNumberStart = startLine;
       n.showLineNumbers = true;
       renderNode(n, ndEl(n.id));
+      autoFitNode(n);
       scheduleSave();
       setNote(`✓ Fetched ${sliced.length} line(s).`, 'ok');
       setTimeout(close, 900);
