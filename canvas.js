@@ -1821,6 +1821,23 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 })();
 
 // ═══════════════════════════════════════════════════════
+// HELP DIALOG
+// ═══════════════════════════════════════════════════════
+(function () {
+  const overlay = document.getElementById('help-dialog-overlay');
+  const closeBtn = document.getElementById('help-close');
+
+  document.getElementById('btn-help').addEventListener('click', () => {
+    overlay.style.display = 'flex';
+  });
+  closeBtn.addEventListener('click', () => { overlay.style.display = 'none'; });
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && overlay.style.display !== 'none') overlay.style.display = 'none';
+  });
+})();
+
+// ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
 restoreFromStorage();

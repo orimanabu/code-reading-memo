@@ -14,6 +14,7 @@
   <span class="logo">∞</span>
   <input id="canvas-title" placeholder="Canvas title" spellcheck="false">
   <div class="sep"></div>
+  <span id="mode-indicator">SELECT</span>
   <button class="tb-btn" id="btn-add">+ Add Block</button>
   <button class="tb-btn" id="btn-add-bubble">💬 Bubble</button>
   <div class="sep"></div>
@@ -23,8 +24,7 @@
   <label class="tb-btn" id="btn-import-label" style="cursor:pointer;">↑ Import<input type="file" id="btn-import" accept=".json" style="display:none;"></label>
   <button class="tb-btn danger" id="btn-clear">🗑 Clear</button>
   <div class="sep"></div>
-  <span id="mode-indicator">SELECT</span>
-  <span class="hint">v: select &nbsp;|&nbsp; h: hand &nbsp;|&nbsp; Shift+click: multi-select &nbsp;|&nbsp; Cmd/Ctrl+C/X/V: copy/cut/paste &nbsp;|&nbsp; Del: delete &nbsp;|&nbsp; Ctrl/Cmd+drag: zoom &nbsp;|&nbsp; double-click: add block &nbsp;|&nbsp; select text → link</span>
+  <button class="tb-btn" id="btn-help">? Help</button>
 </div>
 
 <div id="wrap">
@@ -135,6 +135,38 @@
         <button class="tb-btn" id="csd-results-back">← Back</button>
         <button class="tb-btn" id="csd-results-cancel">Cancel</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Help / Keyboard Shortcuts Dialog -->
+<div id="help-dialog-overlay" style="display:none;">
+  <div class="git-dialog help-dialog">
+    <div class="git-dialog-title">⌨ Keyboard Shortcuts</div>
+    <table class="help-table">
+      <tbody>
+        <tr><th>Mode</th><td></td></tr>
+        <tr><td><kbd>v</kbd></td><td>Select mode</td></tr>
+        <tr><td><kbd>h</kbd></td><td>Hand (pan) mode</td></tr>
+        <tr><td><kbd>Space</kbd> (hold)</td><td>Temporary hand mode</td></tr>
+        <tr><th>Navigation</th><td></td></tr>
+        <tr><td><kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + drag</td><td>Zoom</td></tr>
+        <tr><td>Double-click canvas</td><td>Add block</td></tr>
+        <tr><th>Selection</th><td></td></tr>
+        <tr><td><kbd>Shift</kbd> + click</td><td>Multi-select</td></tr>
+        <tr><td><kbd>Cmd</kbd> / <kbd>Ctrl</kbd> + <kbd>C</kbd></td><td>Copy node(s)</td></tr>
+        <tr><td><kbd>Cmd</kbd> / <kbd>Ctrl</kbd> + <kbd>X</kbd></td><td>Cut node(s)</td></tr>
+        <tr><td><kbd>Cmd</kbd> / <kbd>Ctrl</kbd> + <kbd>V</kbd></td><td>Paste node(s)</td></tr>
+        <tr><td><kbd>Del</kbd> / <kbd>Backspace</kbd></td><td>Delete selected</td></tr>
+        <tr><th>Links</th><td></td></tr>
+        <tr><td><kbd>l</kbd></td><td>Toggle link mode</td></tr>
+        <tr><td>Select text → tooltip</td><td>Create link</td></tr>
+        <tr><th>General</th><td></td></tr>
+        <tr><td><kbd>Escape</kbd></td><td>Exit edit / link mode</td></tr>
+      </tbody>
+    </table>
+    <div class="git-form-buttons">
+      <button class="git-btn-save" id="help-close">Close</button>
     </div>
   </div>
 </div>

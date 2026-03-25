@@ -197,7 +197,21 @@ body {
 }
 #toolbar .logo { color: #388bfd; font-weight: 700; font-size: 14px; }
 #toolbar .sep { width: 1px; height: 18px; background: #30363d; flex-shrink: 0; }
-#toolbar .hint { font-size: 11px; color: #6e7681; }
+.help-dialog { width: 420px; }
+.help-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
+.help-table th {
+  text-align: left; color: #8b949e; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.4px;
+  padding: 12px 0 4px; border-bottom: 1px solid #21262d;
+}
+.help-table td { padding: 5px 8px 5px 0; color: #e6edf3; vertical-align: middle; }
+.help-table td:last-child { color: #8b949e; }
+kbd {
+  display: inline-block; padding: 1px 5px; font-size: 11px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  background: #21262d; border: 1px solid #30363d; border-radius: 4px;
+  color: #e6edf3; line-height: 1.6;
+}
 
 #canvas-title {
   font-size: 14px; font-weight: 700; color: #e6edf3;
@@ -344,7 +358,8 @@ body.link-mode .node:hover {
 /* ── Git Config Dialog ── */
 #git-dialog-overlay,
 #fetch-dialog-overlay,
-#codesnippetd-dialog-overlay {
+#codesnippetd-dialog-overlay,
+#help-dialog-overlay {
   position: fixed; inset: 0; z-index: 500;
   background: rgba(0,0,0,0.65);
   display: flex; align-items: center; justify-content: center;
