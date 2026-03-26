@@ -649,6 +649,679 @@
 
 ❯ `div id="codesnippetd-main-form` が表示された際、エンターキーを押すとfetchボタンを押したことにしてください
 
+```
+ ▐▛███▜▌   Claude Code v2.1.76
+▝▜█████▛▘  Sonnet 4.6 · Claude Pro
+  ▘▘ ▝▝    ~/devel/src/github.com/orimanabu/code-canvas
+
+❯ このプロジェクトのコードにはテストコードが全くありません。が、今後のためにテストコードを整備したいです。そもそもJavaScriptでUIのプログラムを作った場合、どのようなテストをすれば
+よいですか？
+
+⏺ JavaScriptのUIプログラムに対するテスト戦略を説明します。このプロジェクトの構造（単一HTMLファイル）を踏まえた実践的な話をします。
+
+  テストの種類と優先度
+
+  1. ユニットテスト (Unit Tests) — 最優先
+
+  ロジックを単独でテストする。このプロジェクトで対象になる関数：
+
+  - 純粋関数: s2c(), c2s() (座標変換), EXT_LANG マッピング
+  - State変換: addNode(), deleteNode(), addLink(), deleteLink()
+  - Persistence: save()/load() のシリアライズ/デシリアライズロジック
+  - ノードデータモデル: フィールドのバリデーション、デフォルト値
+
+  ツール: Vitest または Jest
+
+  // 例: s2c (screen-to-canvas座標変換) のユニットテスト
+  test('s2c converts screen coords to canvas coords', () => {
+    const vp = { x: 100, y: 100, z: 2 };
+    expect(s2c(200, 300, vp)).toEqual({ x: 50, y: 100 });
+  });
+
+  ---
+  2. コンポーネント/DOM テスト — 中優先度
+
+  DOM操作が正しく行われるかをテスト。jsdomを使ってブラウザ環境をシミュレート：
+
+  - renderNode() がDOMを正しく生成するか
+  - startEdit() / stopEdit() の状態遷移
+  - renderLinks() がSVGパスを正しく生成するか
+
+  ツール: Vitest + jsdom、または Testing Library
+
+  ---
+  3. 統合テスト (Integration Tests) — 中優先度
+
+  複数の機能が連携して動くかをテスト：
+
+  - ノード追加 → 保存 → 読み込み → 復元されるか
+  - リンク作成 → 削除 → SVGが更新されるか
+  - Git fetch → ノードにコードが挿入されるか
+
+  ---
+  4. E2Eテスト (End-to-End Tests) — 低優先度（重要機能のみ）
+
+  実際のブラウザで動作確認：
+
+  - ノードのドラッグ操作
+  - ズーム/パン
+  - キーボードショートカット
+
+  ツール: Playwright または Cypress
+
+  ---
+  このプロジェクトへの現実的な提言
+
+  canvas.html は全てinlineのため、まずリファクタリングが必要です：
+
+  ┌───────────────────────────┬──────────────────────────────────────────┐
+  │           課題            │                  解決策                  │
+  ├───────────────────────────┼──────────────────────────────────────────┤
+  │ 関数がグローバルスコープ  │ モジュール化（ESModules）                │
+  ├───────────────────────────┼──────────────────────────────────────────┤
+  │ テスト対象関数がDOMに依存 │ ロジックとUIの分離                       │
+  ├───────────────────────────┼──────────────────────────────────────────┤
+  │ 単一ファイル              │ canvas.js, canvas.css, index.html に分割 │
+  └───────────────────────────┴──────────────────────────────────────────┘
+
+  推奨アプローチ（段階的）
+
+  1. Phase 1: ロジック関数を canvas.js に切り出してユニットテスト
+  2. Phase 2: jsdomでDOM操作テストを追加
+  3. Phase 3: Playwrightで主要ユーザーフローのE2Eテスト
+
+  ---
+  現状のcanvas.htmlでテストを始めるとしたら
+
+  最小コストで始めるなら、まずユニットテスト可能な純粋関数を特定して分離することをお勧めします。テスト基盤を整えるにあたって、実際にコードを分割・リファクタリングするところから手伝
+  うこともできます。どこから始めますか？
+
+❯ CLAUDE.mdの内容が古いかもしれません。昔はcanvas.html単一のファイルのみでしたが、今はすでにcanvas.js, canvas.css,
+index.htmlに分割ずみです。それを踏まえてリファクタリングからお願いします
+
+⏺ まず現状のファイル構成を確認します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ index.html はなく canvas.html のままですね。実際のコード構成を確認します。
+
+⏺ Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+⏺ コード全体の構造を把握できました。リファクタリングの計画を立てます。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 現状をまとめると：
+  - canvas.js (1850行) — 全関数がグローバルスコープ、DOM直接参照
+  - canvas.html — <script src="canvas.js"> で読み込み
+  - テスト基盤ゼロ
+
+  方針: テスト可能な純粋関数を canvas-utils.js に分離 → ESモジュール化 → Vitest でテスト
+
+  対象の純粋関数（DOM依存なし）：
+  - esc, langFromPath, EXT_LANG
+  - splitHtmlLines, addLineNumbers, injectAnchor
+  - roundedRectRayHit, edgePoint
+
+  実装します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 全体像が把握できました。canvas-utils.js を作成し、canvas.js からインポートするよう変更、そしてVitest環境を設定します。
+
+⏺ Write(canvas-utils.js)
+  ⎿  Wrote 200 lines to canvas-utils.js
+       1 'use strict';
+       2
+       3 // ═══════════════════════════════════════════════════════
+       4 // UTILS
+       5 // ═══════════════════════════════════════════════════════
+       6 export function esc(s) {
+       7   return String(s)
+       8     .replace(/&/g, '&amp;')
+       9     .replace(/</g, '&lt;')
+      10     .replace(/>/g, '&gt;')
+     … +190 lines (ctrl+o to expand)
+
+⏺ 次に canvas.js を修正してインポートに切り替えます。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines
+      1  'use strict';
+      2
+      3 +import { esc, EXT_LANG, langFromPath, injectAnchor, splitHtmlLines, addLineNumbers, roundedRectRayHit, edgePoint } from './canvas-utils.js';
+      4 +
+      5  // ═══════════════════════════════════════════════════════
+      6  // STATE
+      7  // ═══════════════════════════════════════════════════════
+
+⏺ 次に canvas.js から移動した関数の定義を削除します。
+
+⏺ Update(canvas.js)
+  ⎿  Removed 50 lines
+       90  // ═══════════════════════════════════════════════════════
+       91  // HIGHLIGHT
+       92  // ═══════════════════════════════════════════════════════
+       93 -const EXT_LANG = {
+       94 -  js: 'javascript', mjs: 'javascript', cjs: 'javascript',
+       95 -  jsx: 'javascript',
+       96 -  ts: 'typescript', mts: 'typescript', cts: 'typescript',
+       97 -  tsx: 'typescript',
+       98 -  py: 'python', pyw: 'python',
+       99 -  rb: 'ruby',
+      100 -  go: 'go',
+      101 -  rs: 'rust',
+      102 -  c: 'cpp', h: 'cpp',
+      103 -  cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', hxx: 'cpp',
+      104 -  cs: 'csharp',
+      105 -  java: 'java',
+      106 -  kt: 'kotlin', kts: 'kotlin',
+      107 -  swift: 'swift',
+      108 -  sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'bash',
+      109 -  html: 'html', htm: 'html',
+      110 -  css: 'css',
+      111 -  scss: 'scss',
+      112 -  less: 'less',
+      113 -  json: 'json',
+      114 -  yaml: 'yaml', yml: 'yaml',
+      115 -  toml: 'ini',
+      116 -  xml: 'xml',
+      117 -  md: 'markdown', markdown: 'markdown',
+      118 -  sql: 'sql',
+      119 -  r: 'r',
+      120 -  lua: 'lua',
+      121 -  php: 'php',
+      122 -  pl: 'perl',
+      123 -  ex: 'elixir', exs: 'elixir',
+      124 -  erl: 'erlang',
+      125 -  hs: 'haskell',
+      126 -  scala: 'scala',
+      127 -  dart: 'dart',
+      128 -  makefile: 'makefile',
+      129 -  dockerfile: 'dockerfile',
+      130 -};
+      131 -
+      132 -function langFromPath(filePath) {
+      133 -  if (!filePath) return null;
+      134 -  const base = filePath.split('/').pop();
+      135 -  // Files without extension, e.g. Dockerfile, Makefile
+      136 -  const nameLower = base.toLowerCase();
+      137 -  if (nameLower === 'dockerfile') return 'dockerfile';
+      138 -  if (nameLower === 'makefile')   return 'makefile';
+      139 -  const ext = base.includes('.') ? base.split('.').pop().toLowerCase() : null;
+      140 -  return ext ? (EXT_LANG[ext] ?? null) : null;
+      141 -}
+      142 -
+       93  function highlight(code, filePath) {
+       94    if (!code.trim()) return { html: esc(code), lang: 'text' };
+       95    const extLang = langFromPath(filePath);
+
+⏺ Update(canvas.js)
+  ⎿  Removed 58 lines
+      103    return { html: res.value, lang: res.language || 'text' };
+      104  }
+      105
+      106 -// Replace first occurrence of `rawText` in HTML string, only inside text nodes (outside tags)
+      107 -function injectAnchor(html, rawText, linkId) {
+      108 -  const pat = rawText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      109 -  const re  = new RegExp(pat, 'g');
+      110 -  // split on HTML tags
+      111 -  const parts = html.split(/(<[^>]*>)/);
+      112 -  return parts.map((p, i) => {
+      113 -    if (i % 2 === 1) return p; // tag → pass through
+      114 -    return p.replace(re, () =>
+      115 -      `<span class="link-anchor" data-lid="${linkId}">${esc(rawText)}</span>`
+      116 -    );
+      117 -  }).join('');
+      118 -}
+      119 -
+      120 -// Split highlighted HTML into per-line strings, correctly handling spans that
+      121 -// cross line boundaries (e.g. highlight.js wraps ")\n{" inside one <span>).
+      122 -// At each \n we close all currently-open spans and reopen them on the next line.
+      123 -function splitHtmlLines(html) {
+      124 -  const lines = [];
+      125 -  let cur = '';
+      126 -  const openTags = []; // stack of opening tag strings, e.g. '<span class="hljs-function">'
+      127 -  let i = 0;
+      128 -  while (i < html.length) {
+      129 -    if (html[i] === '<') {
+      130 -      const end = html.indexOf('>', i);
+      131 -      if (end === -1) { cur += html.slice(i); break; }
+      132 -      const tag = html.slice(i, end + 1);
+      133 -      i = end + 1;
+      134 -      cur += tag;
+      135 -      if (tag.startsWith('</')) {
+      136 -        openTags.pop();
+      137 -      } else {
+      138 -        openTags.push(tag);
+      139 -      }
+      140 -    } else if (html[i] === '\n') {
+      141 -      // Close all open spans, emit this line, then reopen them for the next line
+      142 -      lines.push(cur + '</span>'.repeat(openTags.length));
+      143 -      cur = openTags.join('');
+      144 -      i++;
+      145 -    } else {
+      146 -      cur += html[i];
+      147 -      i++;
+      148 -    }
+      149 -  }
+      150 -  lines.push(cur);
+      151 -  return lines;
+      152 -}
+      153 -
+      154 -// Wrap highlighted HTML lines with line-number spans
+      155 -function addLineNumbers(html, start) {
+      156 -  const lines = splitHtmlLines(html);
+      157 -  // Trim trailing empty line if code ends with \n
+      158 -  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+      159 -  return lines.map((lineHtml, i) =>
+      160 -    `<span class="code-line"><span class="ln-num" data-li="${i}">${start + i}</span>${lineHtml}</span>`
+      161 -  ).join('');
+      162 -}
+      163 -
+      106  function buildCodeHTML(code, nodeId) {
+      107    const n = S.nodes.find(n => n.id === nodeId);
+      108    let { html, lang } = highlight(code, n?.filePath);
+
+⏺ 次に roundedRectRayHit と edgePoint を削除します。
+
+⏺ Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Removed 54 lines
+      350    }
+      351  }
+      352
+      353 -// Ray vs rounded-rect intersection.
+      354 -// Returns { x, y, tx, ty } — hit point and tangent direction along the border — or null.
+      355 -function roundedRectRayHit(ocx, ocy, tipX, tipY, bl, br, r) {
+      356 -  const left = bl.x, right = br.x, top = bl.y, bottom = br.y;
+      357 -  const dx = tipX - ocx, dy = tipY - ocy;
+      358 -  let bestT = Infinity, bestX, bestY, bestTx, bestTy;
+      359 -
+      360 -  function tryT(t, px, py, tx, ty) {
+      361 -    if (t > 1e-9 && t < bestT) { bestT = t; bestX = px; bestY = py; bestTx = tx; bestTy = ty; }
+      362 -  }
+      363 -
+      364 -  // Four straight edges (only the non-corner segments)
+      365 -  if (Math.abs(dx) > 1e-9) {
+      366 -    const tl = (left  - ocx) / dx;
+      367 -    if (tl > 1e-9) { const py = ocy + tl * dy; if (py >= top + r && py <= bottom - r) tryT(tl, left,  py, 0, 1); }
+      368 -    const tr = (right - ocx) / dx;
+      369 -    if (tr > 1e-9) { const py = ocy + tr * dy; if (py >= top + r && py <= bottom - r) tryT(tr, right, py, 0, 1); }
+      370 -  }
+      371 -  if (Math.abs(dy) > 1e-9) {
+      372 -    const tt = (top    - ocy) / dy;
+      373 -    if (tt > 1e-9) { const px = ocx + tt * dx; if (px >= left + r && px <= right - r) tryT(tt, px, top,    1, 0); }
+      374 -    const tb = (bottom - ocy) / dy;
+      375 -    if (tb > 1e-9) { const px = ocx + tb * dx; if (px >= left + r && px <= right - r) tryT(tb, px, bottom, 1, 0); }
+      376 -  }
+      377 -
+      378 -  // Four corner arcs — each constrained to its quadrant
+      379 -  const arcs = [
+      380 -    { cx: left  + r, cy: top    + r, xMin: left,    xMax: left  + r, yMin: top,      yMax: top    + r },
+      381 -    { cx: right - r, cy: top    + r, xMin: right- r, xMax: right,    yMin: top,      yMax: top    + r },
+      382 -    { cx: left  + r, cy: bottom - r, xMin: left,    xMax: left  + r, yMin: bottom- r, yMax: bottom    },
+      383 -    { cx: right - r, cy: bottom - r, xMin: right- r, xMax: right,    yMin: bottom- r, yMax: bottom    },
+      384 -  ];
+      385 -  for (const arc of arcs) {
+      386 -    const fx = ocx - arc.cx, fy = ocy - arc.cy;
+      387 -    const a  = dx * dx + dy * dy;
+      388 -    const b  = 2 * (fx * dx + fy * dy);
+      389 -    const c  = fx * fx + fy * fy - r * r;
+      390 -    const disc = b * b - 4 * a * c;
+      391 -    if (disc < 0) continue;
+      392 -    const sq = Math.sqrt(disc);
+      393 -    for (const sign of [1, -1]) {
+      394 -      const t = (-b + sign * sq) / (2 * a);
+      395 -      if (t <= 1e-9 || t >= bestT) continue;
+      396 -      const px = ocx + t * dx, py = ocy + t * dy;
+      397 -      if (px < arc.xMin || px > arc.xMax || py < arc.yMin || py > arc.yMax) continue;
+      398 -      // Tangent = radius vector rotated 90° CCW
+      399 -      const rx = px - arc.cx, ry = py - arc.cy;
+      400 -      tryT(t, px, py, -ry / r, rx / r);
+      401 -    }
+      402 -  }
+      403 -
+      404 -  return bestT < Infinity ? { x: bestX, y: bestY, tx: bestTx, ty: bestTy } : null;
+      405 -}
+      406 -
+      353  // Draw bubble tail as smooth SVG path + draggable handle (screen coords)
+      354  function renderBubbleTail(n) {
+      355    svgLinks.querySelector(`[data-btail="${n.id}"]`)?.remove();
+
+⏺ Update(canvas.js)
+  ⎿  Removed 16 lines
+      729    scheduleSave();
+      730  }
+      731
+      732 -function edgePoint(from, to) {
+      733 -  const fcx = from.x + from.w / 2, fcy = from.y + from.h / 2;
+      734 -  const tcx = to.x + to.w / 2,   tcy = to.y + to.h / 2;
+      735 -  const dx = tcx - fcx, dy = tcy - fcy;
+      736 -  const hw = from.w / 2, hh = from.h / 2;
+      737 -  if (Math.abs(dx) * hh > Math.abs(dy) * hw) {
+      738 -    const x = fcx + (dx > 0 ? hw : -hw);
+      739 -    const y = fcy + dy / (Math.abs(dx) || 1) * hw;
+      740 -    return { x, y };
+      741 -  } else {
+      742 -    const y = fcy + (dy > 0 ? hh : -hh);
+      743 -    const x = fcx + dx / (Math.abs(dy) || 1) * hh;
+      744 -    return { x, y };
+      745 -  }
+      746 -}
+      747 -
+      732  // canvas coords → screen coords
+      733  function c2s(cx, cy) {
+      734    return {
+
+⏺ 次に esc 関数を削除します。
+
+⏺ Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Removed 7 lines
+      1084  // ═══════════════════════════════════════════════════════
+      1085  // UTILS
+      1086  // ═══════════════════════════════════════════════════════
+      1087 -function esc(s) {
+      1088 -  return String(s)
+      1089 -    .replace(/&/g, '&amp;')
+      1090 -    .replace(/</g, '&lt;')
+      1091 -    .replace(/>/g, '&gt;')
+      1092 -    .replace(/"/g, '&quot;');
+      1093 -}
+      1087  function setStatus(msg) { statusEl.textContent = msg; }
+      1088
+      1089  // ═══════════════════════════════════════════════════════
+
+⏺ canvas.html の script タグを type="module" に変更します。
+
+⏺ Update(canvas.html)
+  ⎿  Added 1 line, removed 1 line
+      174  <div id="link-tip">🔗 Create link from here</div>
+      175  <div id="status">Ready</div>
+      176
+      177 -<script src="canvas.js"></script>
+      177 +<script type="module" src="canvas.js"></script>
+      178  </body>
+      179  </html>
+
+⏺ 次に Vitest 環境をセットアップします。
+
+⏺ Write(package.json)
+  ⎿  Wrote 11 lines to package.json
+       1 {
+       2   "name": "code-canvas",
+       3   "type": "module",
+       4   "scripts": {
+       5     "test": "vitest run",
+       6     "test:watch": "vitest"
+       7   },
+       8   "devDependencies": {
+       9     "vitest": "^2.0.0"
+      10   }
+     … +1 line (ctrl+o to expand)
+
+⏺ Write(vitest.config.js)
+  ⎿  Wrote 7 lines to vitest.config.js
+      1 import { defineConfig } from 'vitest/config';
+      2
+      3 export default defineConfig({
+      4   test: {
+      5     environment: 'node',
+      6   },
+      7 });
+
+⏺ テストファイルを作成します。
+
+⏺ Bash(mkdir -p /Users/ori/devel/src/github.com/orimanabu/code-canvas/tests)
+  ⎿  Done
+
+⏺ Write(tests/canvas-utils.test.js)
+  ⎿  Wrote 239 lines to tests/canvas-utils.test.js
+       1 import { describe, it, expect } from 'vitest';
+       2 import {
+       3   esc,
+       4   EXT_LANG,
+       5   langFromPath,
+       6   injectAnchor,
+       7   splitHtmlLines,
+       8   addLineNumbers,
+       9   edgePoint,
+      10   roundedRectRayHit,
+     … +229 lines (ctrl+o to expand)
+
+⏺ インストールしてテストを実行します。
+
+⏺ Bash(npm install 2>&1)
+  ⎿  added 43 packages, and audited 44 packages in 8s
+
+     12 packages are looking for funding
+     … +13 lines (ctrl+o to expand)
+  ⎿  (timeout 1m)
+
+⏺ Bash(npm test 2>&1)
+  ⎿  Error: Exit code 1
+
+     > test
+     > vitest run
+
+
+      RUN  v2.1.9 /Users/ori/devel/src/github.com/orimanabu/code-canvas
+
+      ❯ tests/canvas-utils.test.js (32 tests | 2 failed) 11ms
+        × splitHtmlLines > handles nested spans crossing lines 4ms
+     … +50 lines (ctrl+o to see all)
+
+⏺ 30/32 テスト通過。2件のテストの期待値が間違っているので修正します。
+
+  Test 1: splitHtmlLines の nested spans — 実際の動作は正しく両方の閉じタグを持つ
+  Test 2: roundedRectRayHit の"miss"テスト — 開始点(50,30)がボックス内部なので必ずヒットする
+
+⏺ Update(tests/canvas-utils.test.js)
+  ⎿  Added 2 lines, removed 1 line
+      118      const result = splitHtmlLines(input);
+      119      expect(result).toHaveLength(2);
+      120      expect(result[0]).toBe('<span class="a"><span class="b">x</span></span>');
+      121 -    expect(result[1]).toBe('<span class="a"><span class="b">y</span>');
+      121 +    // Both spans are reopened on line 2, then closed by the original closing tags
+      122 +    expect(result[1]).toBe('<span class="a"><span class="b">y</span></span>');
+      123    });
+      124  });
+      125
+
+⏺ Update(tests/canvas-utils.test.js)
+  ⎿  Added 2 lines, removed 2 lines
+      205    const r  = 8;
+      206
+      207    it('returns null when ray misses entirely', () => {
+      208 -    // Ray pointing away from the box
+      209 -    const result = roundedRectRayHit(50, 30, -200, -200, bl, br, r);
+      208 +    // Ray starts outside the box and points further away from it
+      209 +    const result = roundedRectRayHit(200, 200, 300, 300, bl, br, r);
+      210      expect(result).toBeNull();
+      211    });
+      212
+
+⏺ Bash(npm test 2>&1)
+  ⎿  > test
+     > vitest run
+     … +9 lines (ctrl+o to expand)
+
+⏺ 全32テスト通過しました。最後に .gitignore に node_modules を追加します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(.gitignore)
+  ⎿  Added 1 line
+      1  *~
+      2 +node_modules/
+
+⏺ 完了です。以下の変更を行いました：
+
+  ---
+  変更内容まとめ
+
+  リファクタリング
+
+  canvas-utils.js（新規）
+  DOM・グローバル状態に依存しない純粋関数を切り出してエクスポート：
+  - esc — HTMLエスケープ
+  - EXT_LANG, langFromPath — 拡張子→言語マッピング
+  - injectAnchor, splitHtmlLines, addLineNumbers — HTML処理
+  - roundedRectRayHit, edgePoint — ジオメトリ計算
+
+  canvas.js
+  - canvas-utils.js から import するよう変更
+  - 移動した関数定義を削除（約100行削減）
+
+  canvas.html
+  - <script src="canvas.js"> → <script type="module" src="canvas.js">
+
+  テスト基盤
+
+  ┌────────────────────────────┬────────────────────┐
+  │          ファイル          │        内容        │
+  ├────────────────────────────┼────────────────────┤
+  │ package.json               │ Vitest 設定        │
+  ├────────────────────────────┼────────────────────┤
+  │ vitest.config.js           │ テスト環境設定     │
+  ├────────────────────────────┼────────────────────┤
+  │ tests/canvas-utils.test.js │ 32テスト（全通過） │
+  └────────────────────────────┴────────────────────┘
+
+  npm test      # 一回実行
+  npm run test:watch  # ウォッチモード
+
+✻ Baked for 5m 26s
+
+❯ CLAUDE.mdのファイル構成に関する記載をアップデートして
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 28 lines, removed 15 lines
+       4
+       5  ## Overview
+       6
+       7 -This is a single-file browser application (`canvas.html`) — an infinite canvas tool ("∞ Code Canvas") for taking structured notes while reading source code. No bui
+         -ld step, no package manager, no server required. Open `canvas.html` directly in a browser.
+       7 +"∞ Code Canvas" is a browser application for taking structured notes while reading source code. No build step required. Open `canvas.html` directly in a browser (s
+         +erved via a local file server or HTTP; ES modules require a server for `import` to work).
+       8
+       9 +## File structure
+      10 +
+      11 +| File | Description |
+      12 +|------|-------------|
+      13 +| `canvas.html` | Entry point. Minimal DOM: toolbar, canvas container, SVG layer, modal dialogs, status bar. Loads `canvas.css` and `canvas.js` as an ES module. |
+      14 +| `canvas.css` | All styles. Two major visual systems: code block nodes (`.node`, `.node-header`, `.node-body`) and bubble/comment nodes (`.bubble-node`, `.bubble-
+         +body`, `.bubble-tail-poly`). |
+      15 +| `canvas.js` | Main application logic (~1700 lines). Organized by sections marked with `// ═══` banners (see below). Imports pure utilities from `canvas-utils.js`
+         +. |
+      16 +| `canvas-utils.js` | Pure utility functions with no DOM or global-state dependencies. Exported for use in both `canvas.js` and unit tests. |
+      17 +| `tests/canvas-utils.test.js` | Vitest unit tests for `canvas-utils.js`. |
+      18 +| `package.json` / `vitest.config.js` | Test tooling (Vitest). Run tests with `npm test`. |
+      19 +
+      20  ## Architecture
+      21
+      11 -Everything lives in `canvas.html` as one self-contained file with three sections:
+      22 +**`canvas.js`** is organized by sections marked with `// ═══` banners:
+      23
+      13 -1. **CSS** (lines ~9–411) — All styles inline in `<style>`. Two major visual systems:
+      14 -   - Code block nodes (`.node`, `.node-header`, `.node-body`)
+      15 -   - Bubble/comment nodes (`.bubble-node`, `.bubble-body`, `.bubble-tail-poly`)
+      24 +- **STATE** — Single `S` object holds all runtime state: nodes, links, viewport, selection, drag, pan, edit mode, git config, clipboard
+      25 +- **VIEWPORT** — `applyVP()`, `s2c()`, `zoom()` manage pan/zoom with CSS transform
+      26 +- **HIGHLIGHT** — highlight.js integration, `highlight()` / `buildCodeHTML()`
+      27 +- **NODES** — `addNode()`, `addBubble()`, `renderNode()`, `renderBubble()`, `startEdit()`, `stopEdit()`, `removeNode()`
+      28 +- **LINKS** — SVG bezier curves connecting nodes, `renderLinks()`, `createLink()`, `removeLink()`
+      29 +- **DRAG/RESIZE** — pointer event handlers on nodes and the canvas wrapper
+      30 +- **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V, Escape, etc.)
+      31 +- **PERSISTENCE** — `saveState()` / `loadState()` via `localStorage`, export/import as JSON, Git snippet fetch via GitHub raw URLs
+      32
+      17 -2. **HTML** (lines ~413–511) — Minimal DOM: a top toolbar (`#toolbar`), a canvas container (`#wrap > #canvas`), an SVG layer (`#svg-links`) for arrows, two modal d
+         -ialogs (Git config, Git fetch), and a status bar.
+      33 +**`canvas-utils.js`** exports pure functions:
+      34
+      19 -3. **JavaScript** (lines ~512–end) — All logic in a single `<script>` block organized by sections marked with `// ═══` banners:
+      20 -   - **STATE** — Single `S` object holds all runtime state: nodes, links, viewport, selection, drag, pan, edit mode, git config, clipboard
+      21 -   - **VIEWPORT** — `applyVP()`, `s2c()`, `zoom()` manage pan/zoom with CSS transform
+      22 -   - **HIGHLIGHT** — highlight.js integration, `EXT_LANG` map for file extension → language, `renderNode()` / `reHighlight()`
+      23 -   - **NODES** — `addNode()`, `addBubble()`, `renderNode()`, `renderBubble()`, `startEdit()`, `stopEdit()`, `deleteNode()`
+      24 -   - **LINKS** — SVG bezier curves connecting nodes, `renderLinks()`, `addLink()`, `deleteLink()`
+      25 -   - **DRAG/RESIZE** — pointer event handlers on nodes and the canvas wrapper
+      26 -   - **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V, Escape, etc.)
+      27 -   - **PERSISTENCE** — `save()` / `load()` via `localStorage`, export/import as JSON, Git snippet fetch via GitHub raw URLs
+      35 +- `esc(s)` — HTML escape
+      36 +- `EXT_LANG`, `langFromPath(filePath)` — file extension → highlight.js language name
+      37 +- `injectAnchor(html, rawText, linkId)` — inject link-anchor span into highlighted HTML
+      38 +- `splitHtmlLines(html)`, `addLineNumbers(html, start)` — per-line HTML rendering with correct span handling
+      39 +- `roundedRectRayHit(...)` — ray vs. rounded-rect intersection (bubble tail geometry)
+      40 +- `edgePoint(from, to)` — exit point on a node's edge toward another node (arrow geometry)
+      41
+      42  ## Key patterns
+      43
+
+⏺ 次に Key patterns セクションのリンクのデータ構造も実態に合わせて修正します。
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 3 lines, removed 3 lines
+      41
+      42  ## Key patterns
+      43
+      44 -- **Node data model**: Each node in `S.nodes[]` is a plain object with `{ id, type, x, y, w, h, code, lang, title, filePath, showLn, startLn }`. Bubble nodes addit
+         -ionally have `{ text, tailX, tailY }`.
+      45 -- **Rendering**: `renderNode(n)` / `renderBubble(n)` create DOM elements and attach event listeners each time a node is added. Nodes are never re-rendered in-place
+         -; the element is replaced on `stopEdit()`.
+      44 +- **Node data model**: Each node in `S.nodes[]` is a plain object with `{ id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart }`. Bubble
+         +nodes have `{ id, type: 'bubble', x, y, w, h, text, tailX, tailY }`.
+      45 +- **Rendering**: `renderNode(n)` / `renderBubbleContent(n)` create DOM elements and attach event listeners each time a node is added. Nodes are never re-rendered i
+         +n-place; the element is replaced on `stopEdit()`.
+      46  - **Edit mode**: `startEdit(id)` swaps the highlighted `<pre>` for a `<textarea>`; `stopEdit()` reads the textarea and re-renders.
+      47 -- **Links**: Created via text selection → tooltip click flow. Stored as `{ id, from, to, text }` in `S.links[]`; rendered as SVG paths on every viewport change.
+      47 +- **Links**: Created via text selection → tooltip click flow. Stored as `{ id, fromId, toId, text }` in `S.links[]`; rendered as SVG paths on every viewport change
+         +.
+      48  - **Persistence**: Auto-saved to `localStorage` key `code-canvas-v1` on every change. Import/export uses JSON with the same schema as `S.nodes` + `S.links`.
+      49  - **Git integration**: Fetches raw file content from GitHub (`raw.githubusercontent.com`) to populate code blocks. Commit hash auto-resolved via GitHub API (`api.g
+          ithub.com`).
+      50
+
+⏺ Node types テーブルのボタン名も英語表記に修正します。
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 2 lines, removed 2 lines
+      52
+      53  | Type | Created by | Key fields |
+      54  |------|-----------|------------|
+      55 -| `code` (default) | "＋ ブロック追加" button or canvas double-click | `code`, `lang`, `title`, `filePath`, `showLn`, `startLn` |
+      56 -| `bubble` | "💬 吹き出し" button | `text`, `tailX`, `tailY` |
+      55 +| `code` (default) | "+ Add Block" button or canvas double-click | `code`, `lang`, `title`, `filePath`, `showLineNumbers`, `lineNumberStart` |
+      56 +| `bubble` | "💬 Bubble" button | `text`, `tailX`, `tailY` |
+      57
+      58  ## Keyboard shortcuts
+      59
+
+⏺ 更新後の内容を確認します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ CLAUDE.md を更新しました。主な変更点：
+
+  - Overview: 「single-file」の記述を削除、ESモジュールのサーバー要件を追記
+  - Architecture セクション全面改訂:
+    - 旧: canvas.html 内の3セクション構成の説明
+    - 新: ファイル構成テーブル（canvas.html / canvas.css / canvas.js / canvas-utils.js / テスト関連ファイル）+ 各ファイルの責務
+  - Key patterns: リンクのフィールド名を from/to → fromId/toId、ノードフィールドを showLn/startLn → showLineNumbers/lineNumberStart に修正
+  - Node types テーブル: ボタン名を英語に修正、フィールド名も更新
+
+✻ Cooked for 52s
+```
+
+
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して

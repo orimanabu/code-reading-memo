@@ -4,34 +4,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a single-file browser application (`canvas.html`) — an infinite canvas tool ("∞ Code Canvas") for taking structured notes while reading source code. No build step, no package manager, no server required. Open `canvas.html` directly in a browser.
+"∞ Code Canvas" is a browser application for taking structured notes while reading source code. No build step required. Open `canvas.html` directly in a browser (served via a local file server or HTTP; ES modules require a server for `import` to work).
+
+## File structure
+
+| File | Description |
+|------|-------------|
+| `canvas.html` | Entry point. Minimal DOM: toolbar, canvas container, SVG layer, modal dialogs, status bar. Loads `canvas.css` and `canvas.js` as an ES module. |
+| `canvas.css` | All styles. Two major visual systems: code block nodes (`.node`, `.node-header`, `.node-body`) and bubble/comment nodes (`.bubble-node`, `.bubble-body`, `.bubble-tail-poly`). |
+| `canvas.js` | Main application logic (~1700 lines). Organized by sections marked with `// ═══` banners (see below). Imports pure utilities from `canvas-utils.js`. |
+| `canvas-utils.js` | Pure utility functions with no DOM or global-state dependencies. Exported for use in both `canvas.js` and unit tests. |
+| `tests/canvas-utils.test.js` | Vitest unit tests for `canvas-utils.js`. |
+| `package.json` / `vitest.config.js` | Test tooling (Vitest). Run tests with `npm test`. |
 
 ## Architecture
 
-Everything lives in `canvas.html` as one self-contained file with three sections:
+**`canvas.js`** is organized by sections marked with `// ═══` banners:
 
-1. **CSS** (lines ~9–411) — All styles inline in `<style>`. Two major visual systems:
-   - Code block nodes (`.node`, `.node-header`, `.node-body`)
-   - Bubble/comment nodes (`.bubble-node`, `.bubble-body`, `.bubble-tail-poly`)
+- **STATE** — Single `S` object holds all runtime state: nodes, links, viewport, selection, drag, pan, edit mode, git config, clipboard
+- **VIEWPORT** — `applyVP()`, `s2c()`, `zoom()` manage pan/zoom with CSS transform
+- **HIGHLIGHT** — highlight.js integration, `highlight()` / `buildCodeHTML()`
+- **NODES** — `addNode()`, `addBubble()`, `renderNode()`, `renderBubble()`, `startEdit()`, `stopEdit()`, `removeNode()`
+- **LINKS** — SVG bezier curves connecting nodes, `renderLinks()`, `createLink()`, `removeLink()`
+- **DRAG/RESIZE** — pointer event handlers on nodes and the canvas wrapper
+- **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V, Escape, etc.)
+- **PERSISTENCE** — `saveState()` / `loadState()` via `localStorage`, export/import as JSON, Git snippet fetch via GitHub raw URLs
 
-2. **HTML** (lines ~413–511) — Minimal DOM: a top toolbar (`#toolbar`), a canvas container (`#wrap > #canvas`), an SVG layer (`#svg-links`) for arrows, two modal dialogs (Git config, Git fetch), and a status bar.
+**`canvas-utils.js`** exports pure functions:
 
-3. **JavaScript** (lines ~512–end) — All logic in a single `<script>` block organized by sections marked with `// ═══` banners:
-   - **STATE** — Single `S` object holds all runtime state: nodes, links, viewport, selection, drag, pan, edit mode, git config, clipboard
-   - **VIEWPORT** — `applyVP()`, `s2c()`, `zoom()` manage pan/zoom with CSS transform
-   - **HIGHLIGHT** — highlight.js integration, `EXT_LANG` map for file extension → language, `renderNode()` / `reHighlight()`
-   - **NODES** — `addNode()`, `addBubble()`, `renderNode()`, `renderBubble()`, `startEdit()`, `stopEdit()`, `deleteNode()`
-   - **LINKS** — SVG bezier curves connecting nodes, `renderLinks()`, `addLink()`, `deleteLink()`
-   - **DRAG/RESIZE** — pointer event handlers on nodes and the canvas wrapper
-   - **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V, Escape, etc.)
-   - **PERSISTENCE** — `save()` / `load()` via `localStorage`, export/import as JSON, Git snippet fetch via GitHub raw URLs
+- `esc(s)` — HTML escape
+- `EXT_LANG`, `langFromPath(filePath)` — file extension → highlight.js language name
+- `injectAnchor(html, rawText, linkId)` — inject link-anchor span into highlighted HTML
+- `splitHtmlLines(html)`, `addLineNumbers(html, start)` — per-line HTML rendering with correct span handling
+- `roundedRectRayHit(...)` — ray vs. rounded-rect intersection (bubble tail geometry)
+- `edgePoint(from, to)` — exit point on a node's edge toward another node (arrow geometry)
 
 ## Key patterns
 
-- **Node data model**: Each node in `S.nodes[]` is a plain object with `{ id, type, x, y, w, h, code, lang, title, filePath, showLn, startLn }`. Bubble nodes additionally have `{ text, tailX, tailY }`.
-- **Rendering**: `renderNode(n)` / `renderBubble(n)` create DOM elements and attach event listeners each time a node is added. Nodes are never re-rendered in-place; the element is replaced on `stopEdit()`.
+- **Node data model**: Each node in `S.nodes[]` is a plain object with `{ id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart }`. Bubble nodes have `{ id, type: 'bubble', x, y, w, h, text, tailX, tailY }`.
+- **Rendering**: `renderNode(n)` / `renderBubbleContent(n)` create DOM elements and attach event listeners each time a node is added. Nodes are never re-rendered in-place; the element is replaced on `stopEdit()`.
 - **Edit mode**: `startEdit(id)` swaps the highlighted `<pre>` for a `<textarea>`; `stopEdit()` reads the textarea and re-renders.
-- **Links**: Created via text selection → tooltip click flow. Stored as `{ id, from, to, text }` in `S.links[]`; rendered as SVG paths on every viewport change.
+- **Links**: Created via text selection → tooltip click flow. Stored as `{ id, fromId, toId, text }` in `S.links[]`; rendered as SVG paths on every viewport change.
 - **Persistence**: Auto-saved to `localStorage` key `code-canvas-v1` on every change. Import/export uses JSON with the same schema as `S.nodes` + `S.links`.
 - **Git integration**: Fetches raw file content from GitHub (`raw.githubusercontent.com`) to populate code blocks. Commit hash auto-resolved via GitHub API (`api.github.com`).
 
@@ -39,8 +52,8 @@ Everything lives in `canvas.html` as one self-contained file with three sections
 
 | Type | Created by | Key fields |
 |------|-----------|------------|
-| `code` (default) | "＋ ブロック追加" button or canvas double-click | `code`, `lang`, `title`, `filePath`, `showLn`, `startLn` |
-| `bubble` | "💬 吹き出し" button | `text`, `tailX`, `tailY` |
+| `code` (default) | "+ Add Block" button or canvas double-click | `code`, `lang`, `title`, `filePath`, `showLineNumbers`, `lineNumberStart` |
+| `bubble` | "💬 Bubble" button | `text`, `tailX`, `tailY` |
 
 ## Keyboard shortcuts
 
