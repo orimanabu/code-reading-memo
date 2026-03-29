@@ -1696,6 +1696,43 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   let targetNodeId = null;
   let pendingFetch = null; // { endpoint, keyword }
 
+  // ── ctags-wasm integration ──────────────────────────────────────────
+  let _ctagsCaptured = '';
+  let _ctagsModule   = null;
+  let _ctagsInitProm = null;
+
+  function ensureCtags() {
+    if (_ctagsModule)   return Promise.resolve(_ctagsModule);
+    if (_ctagsInitProm) return _ctagsInitProm;
+    if (typeof CTagsModule === 'undefined') return Promise.resolve(null);
+    _ctagsInitProm = CTagsModule({
+      print:    line => { _ctagsCaptured += line + '\n'; },
+      printErr: ()   => {},
+    }).then(m => {
+      m._ctags_init();
+      _ctagsModule = m;
+      return m;
+    }).catch(() => null);
+    return _ctagsInitProm;
+  }
+
+  async function ctagsFirstName(code, filename) {
+    const m = await ensureCtags();
+    if (!m) return null;
+    m.ccall('ctags_set_output_format', null, ['string'], ['json']);
+    _ctagsCaptured = '';
+    const enc = new TextEncoder().encode(code);
+    m.ccall('ctags_parse_buffer', null, ['string', 'array', 'number'], [filename, enc, enc.length]);
+    for (const line of _ctagsCaptured.trim().split('\n')) {
+      try {
+        const t = JSON.parse(line);
+        if (t._type === 'tag' && t.name) return t.name;
+      } catch (_) {}
+    }
+    return null;
+  }
+  // ───────────────────────────────────────────────────────────────────
+
   function updateApiTypeUI() {
     const isPipe = apiTypeEl.value === 'pipe';
     contextEl.disabled = isPipe;
@@ -1828,6 +1865,9 @@ document.getElementById('btn-clear').addEventListener('click', () => {
           n.lineNumberStart = item.start;
           n.showLineNumbers = true;
         }
+        // Derive title from ctags: use the name of the first tag in the code
+        const tagName = await ctagsFirstName(item.code, item.path || 'input');
+        if (tagName) n.title = tagName;
         renderNode(n, ndEl(n.id));
         autoFitNode(n);
         scheduleSave();
