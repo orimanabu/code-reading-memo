@@ -3,7 +3,11 @@
     "defaultMode": "acceptEdits",
     "allow": [
       "Bash(git status)",
-      "Bash(git diff)"
+      "Bash(git diff)",
+      "Bash(curl *)",
+      "Bash(npm test *)",
+      "Bash(npx playwright *)",
+      "Bash(node --check *)"
     ],
     "deny": [
       "Read(./memo.md)",
