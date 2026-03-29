@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
+import '../canvas.js';
+const {
   S,
   addNode, removeNode, selectNode, addBubble,
   loadState, saveState, restoreFromStorage,
   createLink, removeLink,
   copyNodes, cutNodes, pasteNodes, toggleMultiSel,
-} from '../canvas.js';
+} = globalThis.__canvasApp;
 
 const STORAGE_KEY = 'code-canvas-v1';
 

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import { S, addNode, removeNode, selectNode, addBubble, loadState } from '../canvas.js';
+import '../canvas.js';
+const { S, addNode, removeNode, selectNode, addBubble, loadState } = globalThis.__canvasApp;
 
 // Reset canvas state and DOM before each test
 function resetState() {
