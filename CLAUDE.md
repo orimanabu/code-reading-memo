@@ -4,17 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-"∞ Code Canvas" is a browser application for taking structured notes while reading source code. No build step required. Open `canvas.html` directly in a browser (served via a local file server or HTTP; ES modules require a server for `import` to work).
+"∞ Code Canvas" is a browser application for taking structured notes while reading source code. No build step required. Open `canvas.html` directly in a browser — works from both a local file server and directly via `file://`.
 
 ## File structure
 
 | File | Description |
 |------|-------------|
-| `canvas.html` | Entry point. Minimal DOM: toolbar, canvas container, SVG layer, modal dialogs, status bar. Loads `canvas.css` and `canvas.js` as an ES module. |
+| `canvas.html` | Entry point. Minimal DOM: toolbar, canvas container, SVG layer, modal dialogs, status bar. Loads `canvas.css` and `canvas.js` as a plain script. |
 | `canvas.css` | All styles. Two major visual systems: code block nodes (`.node`, `.node-header`, `.node-body`) and bubble/comment nodes (`.bubble-node`, `.bubble-body`, `.bubble-tail-poly`). |
-| `canvas.js` | Main application logic (~1700 lines). Organized by sections marked with `// ═══` banners (see below). Imports pure utilities from `canvas-utils.js`. |
-| `canvas-utils.js` | Pure utility functions with no DOM or global-state dependencies. Exported for use in both `canvas.js` and unit tests. |
-| `tests/canvas-utils.test.js` | Vitest unit tests for `canvas-utils.js`. |
+| `canvas.js` | Main application logic. Organized by sections marked with `// ═══` banners (see below). Self-contained plain script with no external JS dependencies. |
 | `package.json` / `vitest.config.js` | Test tooling (Vitest). Run tests with `npm test`. |
 
 ## Architecture
@@ -30,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V, Escape, etc.)
 - **PERSISTENCE** — `saveState()` / `loadState()` via `localStorage`, export/import as JSON, Git snippet fetch via GitHub raw URLs
 
-**`canvas-utils.js`** exports pure functions:
+**Pure utility functions** (defined at the top of `canvas.js`, before the STATE section):
 
 - `esc(s)` — HTML escape
 - `EXT_LANG`, `langFromPath(filePath)` — file extension → highlight.js language name
