@@ -1680,6 +1680,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 (function () {
   const overlay         = document.getElementById('codesnippetd-dialog-overlay');
   const endpointEl      = document.getElementById('csd-endpoint');
+  const apiTypeEl       = document.getElementById('csd-api-type');
   const contextEl       = document.getElementById('csd-context');
   const keywordEl       = document.getElementById('csd-keyword');
   const noteEl          = document.getElementById('csd-note');
@@ -1694,6 +1695,17 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 
   let targetNodeId = null;
   let pendingFetch = null; // { endpoint, keyword }
+
+  function updateApiTypeUI() {
+    const isPipe = apiTypeEl.value === 'pipe';
+    contextEl.disabled = isPipe;
+    keywordEl.disabled = isPipe;
+    contextEl.style.opacity = isPipe ? '0.4' : '';
+    keywordEl.style.opacity = isPipe ? '0.4' : '';
+    fetchBtn.disabled = false;
+  }
+
+  apiTypeEl.addEventListener('change', updateApiTypeUI);
 
   function setNote(msg, type) {
     noteEl.textContent = msg;
@@ -1724,9 +1736,10 @@ document.getElementById('btn-clear').addEventListener('click', () => {
     targetNodeId = nodeId;
     pendingFetch = null;
     setNote('', '');
+    updateApiTypeUI();
     showMain();
     overlay.style.display = 'flex';
-    keywordEl.focus();
+    if (apiTypeEl.value !== 'pipe') keywordEl.focus();
   };
 
   async function fetchAndInsert(endpoint, keyword, index) {
@@ -1795,11 +1808,42 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 
   fetchBtn.addEventListener('click', async () => {
     const endpoint = endpointEl.value.trim();
+    if (!endpoint) { setNote('⚠ API Endpoint is required.', 'err'); return; }
+
+    if (apiTypeEl.value === 'pipe') {
+      fetchBtn.disabled = true;
+      setNote('⏳ Fetching…', '');
+      try {
+        const res = await fetch(`http://${endpoint}/pipe`);
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+        const item = await res.json();
+        if (!item || typeof item.code !== 'string') throw new Error('Invalid /pipe response');
+        const n = S.nodes.find(n => n.id === targetNodeId);
+        if (!n) throw new Error('Node not found');
+        n.code = item.code;
+        if (typeof item.title === 'string' && item.title) n.title = item.title;
+        if (typeof item.lang  === 'string' && item.lang)  n.lang  = item.lang;
+        if (typeof item.path  === 'string' && item.path)  n.filePath = item.path;
+        if (typeof item.start === 'number' && item.start > 0) {
+          n.lineNumberStart = item.start;
+          n.showLineNumbers = true;
+        }
+        renderNode(n, ndEl(n.id));
+        autoFitNode(n);
+        scheduleSave();
+        close();
+        setStatus('Snippet inserted via /pipe');
+      } catch (e) {
+        setNote(`✗ Fetch failed: ${e.message}`, 'err');
+      }
+      fetchBtn.disabled = false;
+      return;
+    }
+
+    // /snippets mode
     const context  = contextEl.value.trim();
     const keyword  = keywordEl.value.trim();
-
-    if (!endpoint) { setNote('⚠ API Endpoint is required.', 'err'); return; }
-    if (!keyword)  { setNote('⚠ Keyword is required.', 'err'); return; }
+    if (!keyword) { setNote('⚠ Keyword is required.', 'err'); return; }
 
     let tagsUrl = `http://${endpoint}/tags/${encodeURIComponent(keyword)}`;
     if (context) tagsUrl += `?context=${encodeURIComponent(context)}`;

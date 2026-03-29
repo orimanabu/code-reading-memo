@@ -2192,6 +2192,155 @@ index.htmlに分割ずみです。それを踏まえてリファクタリング�
 ⏺ よかったです！
 ```
 
+❯ codesnippedボタンを押したときに表示されるモーダルダイアログを変更します。これまでこのダイアログでは `/snippets` REST APIをコールするだけでしたが、これを `/snippets` と `/pipe`
+の2種類のAPIコールができるようなフォームにします。
+具体的には下記のようにしてください
+- 一番上のinputはid="csd-endpoint"を使います。これは`/snippets`、`/pipe`呼び出し共通です
+- 次にセレクトボタンで`/pipe`、`/snippets`のどちらかを選択するUIにします
+- `/pipe`をセレクトした状態だと、contextとkeywordのinputフォームは使いません。これらは無効化してください。Fetchボタンが最初から有効になっており、ボタンを押すと `/pipe`
+をGETします。帰ってきたJSONを使ってrenderNodeします
+- `/snippets`をセレクトした場合は、従来どおりcontextとkeywordのinputフォームが有効になり、Fetchボタンを押すと/snippetsを呼び出します
+
+  Searched for 3 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Now let me look at the relevant JavaScript handling for the codesnippetd dialog:
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Now I have a clear picture. I need to:
+  1. Add a <select> for API type in the HTML dialog
+  2. Update the JS to handle /pipe vs /snippets mode, disable/enable inputs accordingly
+
+⏺ Update(canvas.html)
+  ⎿  Added 7 lines
+      114          <input class="git-form-input" id="csd-endpoint" type="text" value="localhost:8999" spellcheck="false" autocomplete="off">
+      115        </div>
+      116        <div class="git-form-row">
+      117 +        <label class="git-form-label" for="csd-api-type">API Type</label>
+      118 +        <select class="git-form-input" id="csd-api-type">
+      119 +          <option value="snippets">/snippets</option>
+      120 +          <option value="pipe">/pipe</option>
+      121 +        </select>
+      122 +      </div>
+      123 +      <div class="git-form-row">
+      124          <label class="git-form-label" for="csd-context">Context</label>
+      125          <input class="git-form-input" id="csd-context" type="text" placeholder="" spellcheck="false" autocomplete="off">
+      126        </div>
+
+⏺ Now update the JS section:
+
+⏺ Update(canvas.js)
+  ⎿  Added 12 lines
+      1680  (function () {
+      1681    const overlay         = document.getElementById('codesnippetd-dialog-overlay');
+      1682    const endpointEl      = document.getElementById('csd-endpoint');
+      1683 +  const apiTypeEl       = document.getElementById('csd-api-type');
+      1684    const contextEl       = document.getElementById('csd-context');
+      1685    const keywordEl       = document.getElementById('csd-keyword');
+      1686    const noteEl          = document.getElementById('csd-note');
+     ...
+      1696    let targetNodeId = null;
+      1697    let pendingFetch = null; // { endpoint, keyword }
+      1698
+      1699 +  function updateApiTypeUI() {
+      1700 +    const isPipe = apiTypeEl.value === 'pipe';
+      1701 +    contextEl.disabled = isPipe;
+      1702 +    keywordEl.disabled = isPipe;
+      1703 +    contextEl.style.opacity = isPipe ? '0.4' : '';
+      1704 +    keywordEl.style.opacity = isPipe ? '0.4' : '';
+      1705 +    fetchBtn.disabled = false;
+      1706 +  }
+      1707 +
+      1708 +  apiTypeEl.addEventListener('change', updateApiTypeUI);
+      1709 +
+      1710    function setNote(msg, type) {
+      1711      noteEl.textContent = msg;
+      1712      noteEl.className = 'git-form-note' + (type ? ' ' + type : '');
+
+⏺ Now update openCodeSnippetdDialog to call updateApiTypeUI on open, and update the fetchBtn click handler:
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 1 line
+      1736      targetNodeId = nodeId;
+      1737      pendingFetch = null;
+      1738      setNote('', '');
+      1739 +    updateApiTypeUI();
+      1740      showMain();
+      1741      overlay.style.display = 'flex';
+      1741 -    keywordEl.focus();
+      1742 +    if (apiTypeEl.value !== 'pipe') keywordEl.focus();
+      1743    };
+      1744
+      1745    async function fetchAndInsert(endpoint, keyword, index) {
+
+⏺ Now update the fetchBtn click handler to handle /pipe vs /snippets:
+
+⏺ Update(canvas.js)
+  ⎿  Added 34 lines, removed 3 lines
+      1808
+      1809    fetchBtn.addEventListener('click', async () => {
+      1810      const endpoint = endpointEl.value.trim();
+      1811 +    if (!endpoint) { setNote('⚠ API Endpoint is required.', 'err'); return; }
+      1812 +
+      1813 +    if (apiTypeEl.value === 'pipe') {
+      1814 +      fetchBtn.disabled = true;
+      1815 +      setNote('⏳ Fetching…', '');
+      1816 +      try {
+      1817 +        const res = await fetch(`http://${endpoint}/pipe`);
+      1818 +        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      1819 +        const item = await res.json();
+      1820 +        if (!item || typeof item.code !== 'string') throw new Error('Invalid /pipe response');
+      1821 +        const n = S.nodes.find(n => n.id === targetNodeId);
+      1822 +        if (!n) throw new Error('Node not found');
+      1823 +        n.code = item.code;
+      1824 +        if (typeof item.title === 'string' && item.title) n.title = item.title;
+      1825 +        if (typeof item.lang  === 'string' && item.lang)  n.lang  = item.lang;
+      1826 +        if (typeof item.path  === 'string' && item.path)  n.filePath = item.path;
+      1827 +        if (typeof item.start === 'number' && item.start > 0) {
+      1828 +          n.lineNumberStart = item.start;
+      1829 +          n.showLineNumbers = true;
+      1830 +        }
+      1831 +        renderNode(n, ndEl(n.id));
+      1832 +        autoFitNode(n);
+      1833 +        scheduleSave();
+      1834 +        close();
+      1835 +        setStatus('Snippet inserted via /pipe');
+      1836 +      } catch (e) {
+      1837 +        setNote(`✗ Fetch failed: ${e.message}`, 'err');
+      1838 +      }
+      1839 +      fetchBtn.disabled = false;
+      1840 +      return;
+      1841 +    }
+      1842 +
+      1843 +    // /snippets mode
+      1844      const context  = contextEl.value.trim();
+      1845      const keyword  = keywordEl.value.trim();
+      1846 +    if (!keyword) { setNote('⚠ Keyword is required.', 'err'); return; }
+      1847
+      1814 -    if (!endpoint) { setNote('⚠ API Endpoint is required.', 'err'); return; }
+      1815 -    if (!keyword)  { setNote('⚠ Keyword is required.', 'err'); return; }
+      1816 -
+      1848      let tagsUrl = `http://${endpoint}/tags/${encodeURIComponent(keyword)}`;
+      1849      if (context) tagsUrl += `?context=${encodeURIComponent(context)}`;
+      1850
+
+⏺ 変更内容をまとめます:
+
+  HTML (canvas.html):
+  - csd-endpoint の下に <select id="csd-api-type"> を追加（/snippets / /pipe の2択）
+
+  JS (canvas.js):
+  - apiTypeEl の参照を追加
+  - updateApiTypeUI() 関数を追加 — /pipe 選択時に csd-context / csd-keyword を disabled + 半透明にし、Fetchボタンは常に有効
+  - apiTypeEl.addEventListener('change', updateApiTypeUI) でセレクト変更時にUI更新
+  - openCodeSnippetdDialog で開くたびに updateApiTypeUI() を呼ぶよう修正
+  - fetchBtn クリック時:
+    - /pipe モードなら GET http://{endpoint}/pipe → レスポンスJSON（code, title, lang, path, start）をターゲットノードに適用して renderNode
+    - /snippets モードは従来どおり（keyword必須チェック → /tags → 選択 → /snippets）
+
+✻ Cooked for 1m 29s
+```
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して
