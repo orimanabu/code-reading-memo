@@ -1678,23 +1678,31 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 // CODESNIPPETD DIALOG
 // ═══════════════════════════════════════════════════════
 (function () {
-  const overlay         = document.getElementById('codesnippetd-dialog-overlay');
-  const endpointEl      = document.getElementById('csd-endpoint');
-  const apiTypeEl       = document.getElementById('csd-api-type');
-  const contextEl       = document.getElementById('csd-context');
-  const keywordEl       = document.getElementById('csd-keyword');
-  const noteEl          = document.getElementById('csd-note');
-  const fetchBtn        = document.getElementById('csd-fetch');
-  const cancelBtn       = document.getElementById('csd-cancel');
-  const mainForm        = document.getElementById('codesnippetd-main-form');
-  const resultsDiv      = document.getElementById('codesnippetd-results');
-  const tableWrap       = document.getElementById('csd-table-wrap');
-  const resultsNoteEl   = document.getElementById('csd-results-note');
-  const backBtn         = document.getElementById('csd-results-back');
+  const overlay          = document.getElementById('codesnippetd-dialog-overlay');
+  const endpointEl       = document.getElementById('csd-endpoint');
+  const apiTypeEl        = document.getElementById('csd-api-type');
+  const contextEl        = document.getElementById('csd-context');
+  const keywordEl        = document.getElementById('csd-keyword');
+  const noteEl           = document.getElementById('csd-note');
+  const fetchBtn         = document.getElementById('csd-fetch');
+  const cancelBtn        = document.getElementById('csd-cancel');
+  const mainForm         = document.getElementById('codesnippetd-main-form');
+  const resultsDiv       = document.getElementById('codesnippetd-results');
+  const tableWrap        = document.getElementById('csd-table-wrap');
+  const resultsNoteEl    = document.getElementById('csd-results-note');
+  const backBtn          = document.getElementById('csd-results-back');
   const resultsCancelBtn = document.getElementById('csd-results-cancel');
+  const wasmResultsDiv   = document.getElementById('codesnippetd-wasm-results');
+  const wasmStatusEl     = document.getElementById('csd-wasm-status');
+  const wasmTableWrap    = document.getElementById('csd-wasm-table-wrap');
+  const wasmBackBtn      = document.getElementById('csd-wasm-back');
+  const wasmCancelBtn    = document.getElementById('csd-wasm-cancel');
+  const wasmOkBtn        = document.getElementById('csd-wasm-ok');
 
-  let targetNodeId = null;
-  let pendingFetch = null; // { endpoint, keyword }
+  let targetNodeId       = null;
+  let pendingFetch       = null; // { endpoint, keyword }
+  let pendingPipeItem    = null; // /pipe response
+  let pendingCtagsName   = null; // first tag name from ctags
 
   // ── ctags-wasm integration ──────────────────────────────────────────
   let _ctagsCaptured = '';
@@ -1706,8 +1714,9 @@ document.getElementById('btn-clear').addEventListener('click', () => {
     if (_ctagsInitProm) return _ctagsInitProm;
     if (typeof CTagsModule === 'undefined') return Promise.resolve(null);
     _ctagsInitProm = CTagsModule({
-      print:    line => { _ctagsCaptured += line + '\n'; },
-      printErr: ()   => {},
+      print:       line => { _ctagsCaptured += line + '\n'; },
+      printErr:    ()   => {},
+      wasmBinary:  window.__ctagsWasmBinary,
     }).then(m => {
       m._ctags_init();
       _ctagsModule = m;
@@ -1716,20 +1725,25 @@ document.getElementById('btn-clear').addEventListener('click', () => {
     return _ctagsInitProm;
   }
 
-  async function ctagsFirstName(code, filename) {
+  async function runCtagsFull(code, filename) {
     const m = await ensureCtags();
-    if (!m) return null;
+    if (!m) return { firstTagName: null, tags: [] };
     m.ccall('ctags_set_output_format', null, ['string'], ['json']);
     _ctagsCaptured = '';
     const enc = new TextEncoder().encode(code);
     m.ccall('ctags_parse_buffer', null, ['string', 'array', 'number'], [filename, enc, enc.length]);
+    const tags = [];
+    let firstTagName = null;
     for (const line of _ctagsCaptured.trim().split('\n')) {
       try {
         const t = JSON.parse(line);
-        if (t._type === 'tag' && t.name) return t.name;
+        if (t._type === 'tag' && t.name) {
+          if (!firstTagName) firstTagName = t.name;
+          tags.push(t);
+        }
       } catch (_) {}
     }
-    return null;
+    return { firstTagName, tags };
   }
   // ───────────────────────────────────────────────────────────────────
 
@@ -1760,13 +1774,46 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   }
 
   function showMain() {
-    mainForm.style.display = '';
-    resultsDiv.style.display = 'none';
+    mainForm.style.display       = '';
+    resultsDiv.style.display     = 'none';
+    wasmResultsDiv.style.display = 'none';
   }
 
   function showResults() {
-    mainForm.style.display = 'none';
-    resultsDiv.style.display = '';
+    mainForm.style.display       = 'none';
+    resultsDiv.style.display     = '';
+    wasmResultsDiv.style.display = 'none';
+  }
+
+  function showWasmResults() {
+    mainForm.style.display       = 'none';
+    resultsDiv.style.display     = 'none';
+    wasmResultsDiv.style.display = '';
+  }
+
+  function setWasmStatus(msg, type) {
+    wasmStatusEl.textContent = msg;
+    wasmStatusEl.className = 'git-form-note' + (type ? ' ' + type : '');
+  }
+
+  function buildWasmTable(tags) {
+    if (tags.length === 0) {
+      wasmTableWrap.innerHTML = '<div style="font-size:12px;color:#8b949e;padding:8px;">No tags found</div>';
+      return;
+    }
+    const FIXED = ['name', 'kind', 'line', 'pattern'];
+    const keys  = FIXED.filter(k => tags.some(t => t[k] != null));
+    const header = '<tr><th>#</th>' + keys.map(k => `<th>${esc(k)}</th>`).join('') + '</tr>';
+    const rows = tags.map((t, i) => {
+      const cells = keys.map(k => {
+        let val = t[k] != null ? String(t[k]) : '';
+        if (k === 'pattern') val = val.replace(/^\/\^?/, '').replace(/\$?\/$/, '').trim();
+        return `<td>${esc(val)}</td>`;
+      }).join('');
+      return `<tr class="csd-wasm-row"><td>${i + 1}</td>${cells}</tr>`;
+    }).join('');
+    wasmTableWrap.innerHTML =
+      `<table class="csd-table"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
   }
 
   window.openCodeSnippetdDialog = function (nodeId) {
@@ -1855,25 +1902,24 @@ document.getElementById('btn-clear').addEventListener('click', () => {
         if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
         const item = await res.json();
         if (!item || typeof item.code !== 'string') throw new Error('Invalid /pipe response');
-        const n = S.nodes.find(n => n.id === targetNodeId);
-        if (!n) throw new Error('Node not found');
-        n.code = item.code;
-        if (typeof item.title === 'string' && item.title) n.title = item.title;
-        if (typeof item.lang  === 'string' && item.lang)  n.lang  = item.lang;
-        if (typeof item.path  === 'string' && item.path)  n.filePath = item.path;
-        if (typeof item.start === 'number' && item.start > 0) {
-          n.lineNumberStart = item.start;
-          n.showLineNumbers = true;
-        }
-        // Derive title from ctags: use the name of the first tag in the code
-        const tagName = await ctagsFirstName(item.code, item.path || 'input');
-        if (tagName) n.title = tagName;
-        renderNode(n, ndEl(n.id));
-        autoFitNode(n);
-        scheduleSave();
-        close();
-        setStatus('Snippet inserted via /pipe');
+
+        // Switch to wasm results pane
+        pendingPipeItem  = item;
+        pendingCtagsName = null;
+        wasmOkBtn.disabled = true;
+        wasmTableWrap.innerHTML = '';
+        setWasmStatus('⏳ Running ctags-wasm…', '');
+        showWasmResults();
+        setNote('', '');
+
+        // Run ctags
+        const { firstTagName, tags } = await runCtagsFull(item.code, item.path || 'input');
+        pendingCtagsName = firstTagName;
+        setWasmStatus('✓ Ctags-wasm complete', 'ok');
+        buildWasmTable(tags);
+        wasmOkBtn.disabled = false;
       } catch (e) {
+        showMain();
         setNote(`✗ Fetch failed: ${e.message}`, 'err');
       }
       fetchBtn.disabled = false;
@@ -1916,6 +1962,29 @@ document.getElementById('btn-clear').addEventListener('click', () => {
     fetchBtn.disabled = false;
   });
 
+  wasmOkBtn.addEventListener('click', () => {
+    const item = pendingPipeItem;
+    if (!item) return;
+    const n = S.nodes.find(n => n.id === targetNodeId);
+    if (!n) { close(); return; }
+    n.code = item.code;
+    if (typeof item.title === 'string' && item.title) n.title = item.title;
+    if (typeof item.lang  === 'string' && item.lang)  n.lang  = item.lang;
+    if (typeof item.path  === 'string' && item.path)  n.filePath = item.path;
+    if (typeof item.start === 'number' && item.start > 0) {
+      n.lineNumberStart = item.start;
+      n.showLineNumbers = true;
+    }
+    if (pendingCtagsName) n.title = pendingCtagsName;
+    renderNode(n, ndEl(n.id));
+    autoFitNode(n);
+    scheduleSave();
+    close();
+    setStatus('Snippet inserted via /pipe');
+  });
+
+  wasmBackBtn.addEventListener('click', () => { showMain(); });
+  wasmCancelBtn.addEventListener('click', close);
   backBtn.addEventListener('click', showMain);
   resultsCancelBtn.addEventListener('click', close);
   cancelBtn.addEventListener('click', close);

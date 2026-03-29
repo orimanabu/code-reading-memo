@@ -2452,7 +2452,469 @@ rs/ori/devel/src/github.com/orimanabu/ctags/misc/wasm-demo.{html,js}および/Us
 ✻ Baked for 1m 48s
 ```
 
+```
+❯ タイトルは更新されませんでした。ブラウザの開発コンソールで見ると、次のエラーが出ていました。調査してください
+`canvas.html:1 Access to XMLHttpRequest at 'file:///Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm/ctags-wasm.wasm' from origin 'null' has been blocked by CORS policy:
+Cross origin requests are only supported for protocol schemes: chrome, chrome-extension, chrome-untrusted, data, http, https, isolated-app.`
+
+⏺ ctags-wasm.js が内部でどのように .wasm ファイルをロードしているか調べます。
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ .wasm ファイルをfetch/XHRで読もうとしてCORSエラーになっています。file:// では同一オリジンでもXHRが使えません。解決策として、wasmバイナリをbase64エンコードしたJSファイルを生成し、
+  wasmBinaryとして直接渡す方法が最もシンプルです。まずwasmのサイズを確認します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 8MBあります。base64化は約10.7MBになりますが一番確実です。ただしまず ctags-wasm.js に isFileURI のような file:// 対応が入っているか確認します。
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ ctags-wasm.js で Module['wasmBinary'] が参照されているか確認します：
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Module['wasmBinary'] が使えます。これを使えばXHR/fetchを完全にバイパスできます。.wasm をbase64化したJSファイルを生成し、moduleArg で渡します。
+
+  まずbase64ファイルを生成します（約10.7MB）：
+
+⏺ Bash(node -e "
+      const b = require('fs').readFileSync('/Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm/ctags-wasm.wasm');…)
+  ⎿  done, size: 11063322
+
+⏺ 生成できました。次に canvas.html で読み込みます：
+
+⏺ Update(canvas.html)
+  ⎿  Added 1 line
+      181  <div id="link-tip">🔗 Create link from here</div>
+      182  <div id="status">Ready</div>
+      183
+      184 +<script src="ctags-wasm-binary.js"></script>
+      185  <script src="../ctags/build-wasm/ctags-wasm.js"></script>
+      186  <script src="canvas.js"></script>
+      187  </body>
+
+⏺ 次に ensureCtags() で wasmBinary を渡すよう修正します：
+
+⏺ Update(canvas.js)
+  ⎿  Added 3 lines, removed 2 lines
+      1706      if (_ctagsInitProm) return _ctagsInitProm;
+      1707      if (typeof CTagsModule === 'undefined') return Promise.resolve(null);
+      1708      _ctagsInitProm = CTagsModule({
+      1709 -      print:    line => { _ctagsCaptured += line + '\n'; },
+      1710 -      printErr: ()   => {},
+      1709 +      print:       line => { _ctagsCaptured += line + '\n'; },
+      1710 +      printErr:    ()   => {},
+      1711 +      wasmBinary:  window.__ctagsWasmBinary,
+      1712      }).then(m => {
+      1713        m._ctags_init();
+      1714        _ctagsModule = m;
+
+⏺ 変更内容のまとめ：
+
+  問題の原因
+  Chrome は file:// から開いたページで XHR/fetch による file:// URL へのアクセスを CORS でブロックします。ctags-wasm.js は内部で XMLHttpRequest を使って .wasm
+  ファイルを読み込もうとしていたため失敗していました。
+
+  解決策
+  - ctags-wasm.js は Module['wasmBinary'] が渡されると XHR/fetch を一切使わずそのバイナリを直接使います（line 3943）
+  - ctags-wasm.wasm（8MB）を base64 エンコードした ctags-wasm-binary.js（約10.7MB）を生成し window.__ctagsWasmBinary に格納
+  - canvas.html で ctags-wasm-binary.js → ctags-wasm.js → canvas.js の順でロード
+  - ensureCtags() で CTagsModule({ wasmBinary: window.__ctagsWasmBinary, ... }) として渡す
+
+  これで file:// でも HTTP サーバーでも動作します。
+
+✻ Churned for 2m 12s
+```
+
+```
+❯ ctags-wasm-binary.jsを生成するスクリプトを作成して(言語は何でもいいです)
+
+⏺ Write(gen-ctags-wasm-binary.js)
+  ⎿  Wrote 29 lines to gen-ctags-wasm-binary.js
+      1 #!/usr/bin/env node
+      2 // Generates ctags-wasm-binary.js from ctags-wasm.wasm.
+      3 //
+      4 // Usage:
+      5 //   node gen-ctags-wasm-binary.js [wasm-file] [output-file]
+      6 //
+      7 // Defaults:
+      8 //   wasm-file   : ../ctags/build-wasm/ctags-wasm.wasm
+      9 //   output-file : ctags-wasm-binary.js
+     … +19 lines (ctrl+o to expand)
+
+⏺ Bash(chmod +x /Users/ori/devel/src/github.com/orimanabu/code-canvas/gen-ctags-wasm-binary.js)
+  ⎿  Done
+
+⏺ gen-ctags-wasm-binary.js を作成しました。
+
+  # デフォルト（../ctags/build-wasm/ctags-wasm.wasm → ctags-wasm-binary.js）
+  node gen-ctags-wasm-binary.js
+
+  # パスを明示する場合
+  node gen-ctags-wasm-binary.js /path/to/ctags-wasm.wasm [output.js]
+```
+
+```
+❯ codesnippetdのダイアログにおいて、`/pipe`でFetchボタンを押した後、ctags-wasmが実行されたら、ダイアログの下に「wasm実行中」、ctags-wasmの実行が完了したら「wasm実行完了」のような
+表示をし、wasmの実行結果のjsonをテーブルに整形して表示して、OKボタンを押したら次にすすむ(コードブロックに必要な情報を入れる)ようにできますか
+
+⏺ 現在のダイアログHTML・JS全体を確認してから実装します。
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ CSSも確認します：
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ 全体像を把握しました。HTML・CSS・JS の3ファイルを変更します。
+
+  HTML — codesnippetd-wasm-results ペインを追加:
+
+⏺ Update(canvas.html)
+  ⎿  Added 9 lines
+      143          <button class="tb-btn" id="csd-results-cancel">Cancel</button>
+      144        </div>
+      145      </div>
+      146 +    <div id="codesnippetd-wasm-results" style="display:none;">
+      147 +      <div class="git-form-note" id="csd-wasm-status"></div>
+      148 +      <div id="csd-wasm-table-wrap"></div>
+      149 +      <div class="git-form-buttons">
+      150 +        <button class="tb-btn" id="csd-wasm-back">← Back</button>
+      151 +        <button class="tb-btn" id="csd-wasm-cancel">Cancel</button>
+      152 +        <button class="git-btn-save" id="csd-wasm-ok" disabled>OK</button>
+      153 +      </div>
+      154 +    </div>
+      155    </div>
+      156  </div>
+      157
+
+⏺ CSS — #csd-wasm-table-wrap と wasm テーブル行のスタイルを追加:
+
+⏺ Update(canvas.css)
+  ⎿  Added 7 lines
+      443  .csd-table tbody td:first-child {
+      444    color: #6e7681; width: 36px; text-align: right;
+      445  }
+      446 +#csd-wasm-table-wrap {
+      447 +  max-height: 280px; overflow-y: auto;
+      448 +  border: 1px solid #30363d; border-radius: 6px; margin-top: 10px; margin-bottom: 10px;
+      449 +}
+      450 +.csd-wasm-row td { padding: 7px 10px; color: #e6edf3; vertical-align: top; }
+      451 +.csd-wasm-row td:first-child { color: #6e7681; width: 36px; text-align: right; }
+      452 +.csd-wasm-row { border-top: 1px solid #21262d; }
+
+⏺ JS — 大きく書き換えます。まず element 参照・状態変数・ヘルパー群を更新:
+
+⏺ Update(canvas.js)
+  ⎿  Added 23 lines, removed 15 lines
+      1678  // CODESNIPPETD DIALOG
+      1679  // ═══════════════════════════════════════════════════════
+      1680  (function () {
+      1681 -  const overlay         = document.getElementById('codesnippetd-dialog-overlay');
+      1682 -  const endpointEl      = document.getElementById('csd-endpoint');
+      1683 -  const apiTypeEl       = document.getElementById('csd-api-type');
+      1684 -  const contextEl       = document.getElementById('csd-context');
+      1685 -  const keywordEl       = document.getElementById('csd-keyword');
+      1686 -  const noteEl          = document.getElementById('csd-note');
+      1687 -  const fetchBtn        = document.getElementById('csd-fetch');
+      1688 -  const cancelBtn       = document.getElementById('csd-cancel');
+      1689 -  const mainForm        = document.getElementById('codesnippetd-main-form');
+      1690 -  const resultsDiv      = document.getElementById('codesnippetd-results');
+      1691 -  const tableWrap       = document.getElementById('csd-table-wrap');
+      1692 -  const resultsNoteEl   = document.getElementById('csd-results-note');
+      1693 -  const backBtn         = document.getElementById('csd-results-back');
+      1681 +  const overlay          = document.getElementById('codesnippetd-dialog-overlay');
+      1682 +  const endpointEl       = document.getElementById('csd-endpoint');
+      1683 +  const apiTypeEl        = document.getElementById('csd-api-type');
+      1684 +  const contextEl        = document.getElementById('csd-context');
+      1685 +  const keywordEl        = document.getElementById('csd-keyword');
+      1686 +  const noteEl           = document.getElementById('csd-note');
+      1687 +  const fetchBtn         = document.getElementById('csd-fetch');
+      1688 +  const cancelBtn        = document.getElementById('csd-cancel');
+      1689 +  const mainForm         = document.getElementById('codesnippetd-main-form');
+      1690 +  const resultsDiv       = document.getElementById('codesnippetd-results');
+      1691 +  const tableWrap        = document.getElementById('csd-table-wrap');
+      1692 +  const resultsNoteEl    = document.getElementById('csd-results-note');
+      1693 +  const backBtn          = document.getElementById('csd-results-back');
+      1694    const resultsCancelBtn = document.getElementById('csd-results-cancel');
+      1695 +  const wasmResultsDiv   = document.getElementById('codesnippetd-wasm-results');
+      1696 +  const wasmStatusEl     = document.getElementById('csd-wasm-status');
+      1697 +  const wasmTableWrap    = document.getElementById('csd-wasm-table-wrap');
+      1698 +  const wasmBackBtn      = document.getElementById('csd-wasm-back');
+      1699 +  const wasmCancelBtn    = document.getElementById('csd-wasm-cancel');
+      1700 +  const wasmOkBtn        = document.getElementById('csd-wasm-ok');
+      1701
+      1696 -  let targetNodeId = null;
+      1697 -  let pendingFetch = null; // { endpoint, keyword }
+      1702 +  let targetNodeId       = null;
+      1703 +  let pendingFetch       = null; // { endpoint, keyword }
+      1704 +  let pendingPipeItem    = null; // /pipe response
+      1705 +  let pendingCtagsName   = null; // first tag name from ctags
+      1706
+      1707    // ── ctags-wasm integration ──────────────────────────────────────────
+      1708    let _ctagsCaptured = '';
+
+⏺ 次に ctagsFirstName を runCtagsFull に置き換え、showMain/showWasmResults を更新:
+
+⏺ Update(canvas.js)
+  ⎿  Added 9 lines, removed 4 lines
+      1725      return _ctagsInitProm;
+      1726    }
+      1727
+      1728 -  async function ctagsFirstName(code, filename) {
+      1728 +  async function runCtagsFull(code, filename) {
+      1729      const m = await ensureCtags();
+      1730 -    if (!m) return null;
+      1730 +    if (!m) return { firstTagName: null, tags: [] };
+      1731      m.ccall('ctags_set_output_format', null, ['string'], ['json']);
+      1732      _ctagsCaptured = '';
+      1733      const enc = new TextEncoder().encode(code);
+      1734      m.ccall('ctags_parse_buffer', null, ['string', 'array', 'number'], [filename, enc, enc.length]);
+      1735 +    const tags = [];
+      1736 +    let firstTagName = null;
+      1737      for (const line of _ctagsCaptured.trim().split('\n')) {
+      1738        try {
+      1739          const t = JSON.parse(line);
+      1738 -        if (t._type === 'tag' && t.name) return t.name;
+      1740 +        if (t._type === 'tag' && t.name) {
+      1741 +          if (!firstTagName) firstTagName = t.name;
+      1742 +          tags.push(t);
+      1743 +        }
+      1744        } catch (_) {}
+      1745      }
+      1741 -    return null;
+      1746 +    return { firstTagName, tags };
+      1747    }
+      1748    // ───────────────────────────────────────────────────────────────────
+      1749
+
+⏺ close/showMain/showResults/showWasmResults を更新:
+
+⏺ Update(canvas.js)
+  ⎿  Added 37 lines, removed 4 lines
+      1774    }
+      1775
+      1776    function showMain() {
+      1777 -    mainForm.style.display = '';
+      1778 -    resultsDiv.style.display = 'none';
+      1777 +    mainForm.style.display       = '';
+      1778 +    resultsDiv.style.display     = 'none';
+      1779 +    wasmResultsDiv.style.display = 'none';
+      1780    }
+      1781
+      1782    function showResults() {
+      1782 -    mainForm.style.display = 'none';
+      1783 -    resultsDiv.style.display = '';
+      1783 +    mainForm.style.display       = 'none';
+      1784 +    resultsDiv.style.display     = '';
+      1785 +    wasmResultsDiv.style.display = 'none';
+      1786    }
+      1787
+      1788 +  function showWasmResults() {
+      1789 +    mainForm.style.display       = 'none';
+      1790 +    resultsDiv.style.display     = 'none';
+      1791 +    wasmResultsDiv.style.display = '';
+      1792 +  }
+      1793 +
+      1794 +  function setWasmStatus(msg, type) {
+      1795 +    wasmStatusEl.textContent = msg;
+      1796 +    wasmStatusEl.className = 'git-form-note' + (type ? ' ' + type : '');
+      1797 +  }
+      1798 +
+      1799 +  function buildWasmTable(tags) {
+      1800 +    if (tags.length === 0) {
+      1801 +      wasmTableWrap.innerHTML = '<div style="font-size:12px;color:#8b949e;padding:8px;">No tags found</div>';
+      1802 +      return;
+      1803 +    }
+      1804 +    const FIXED = ['name', 'kind', 'line', 'pattern'];
+      1805 +    const keys  = FIXED.filter(k => tags.some(t => t[k] != null));
+      1806 +    const header = '<tr><th>#</th>' + keys.map(k => `<th>${esc(k)}</th>`).join('') + '</tr>';
+      1807 +    const rows = tags.map((t, i) => {
+      1808 +      const cells = keys.map(k => {
+      1809 +        let val = t[k] != null ? String(t[k]) : '';
+      1810 +        if (k === 'pattern') val = val.replace(/^\/\^?/, '').replace(/\$?\/$/, '').trim();
+      1811 +        return `<td>${esc(val)}</td>`;
+      1812 +      }).join('');
+      1813 +      return `<tr class="csd-wasm-row"><td>${i + 1}</td>${cells}</tr>`;
+      1814 +    }).join('');
+      1815 +    wasmTableWrap.innerHTML =
+      1816 +      `<table class="csd-table"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
+      1817 +  }
+      1818 +
+      1819    window.openCodeSnippetdDialog = function (nodeId) {
+      1820      targetNodeId = nodeId;
+      1821      pendingFetch = null;
+
+⏺ /pipe フェッチハンドラを書き換え:
+
+⏺ Update(canvas.js)
+  ⎿  Added 17 lines, removed 18 lines
+      1902          if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      1903          const item = await res.json();
+      1904          if (!item || typeof item.code !== 'string') throw new Error('Invalid /pipe response');
+      1905 -        const n = S.nodes.find(n => n.id === targetNodeId);
+      1906 -        if (!n) throw new Error('Node not found');
+      1907 -        n.code = item.code;
+      1908 -        if (typeof item.title === 'string' && item.title) n.title = item.title;
+      1909 -        if (typeof item.lang  === 'string' && item.lang)  n.lang  = item.lang;
+      1910 -        if (typeof item.path  === 'string' && item.path)  n.filePath = item.path;
+      1911 -        if (typeof item.start === 'number' && item.start > 0) {
+      1912 -          n.lineNumberStart = item.start;
+      1913 -          n.showLineNumbers = true;
+      1914 -        }
+      1915 -        // Derive title from ctags: use the name of the first tag in the code
+      1916 -        const tagName = await ctagsFirstName(item.code, item.path || 'input');
+      1917 -        if (tagName) n.title = tagName;
+      1918 -        renderNode(n, ndEl(n.id));
+      1919 -        autoFitNode(n);
+      1920 -        scheduleSave();
+      1921 -        close();
+      1922 -        setStatus('Snippet inserted via /pipe');
+      1905 +
+      1906 +        // Switch to wasm results pane
+      1907 +        pendingPipeItem  = item;
+      1908 +        pendingCtagsName = null;
+      1909 +        wasmOkBtn.disabled = true;
+      1910 +        wasmTableWrap.innerHTML = '';
+      1911 +        setWasmStatus('⏳ wasm実行中…', '');
+      1912 +        showWasmResults();
+      1913 +        setNote('', '');
+      1914 +
+      1915 +        // Run ctags
+      1916 +        const { firstTagName, tags } = await runCtagsFull(item.code, item.path || 'input');
+      1917 +        pendingCtagsName = firstTagName;
+      1918 +        setWasmStatus('✓ wasm実行完了', 'ok');
+      1919 +        buildWasmTable(tags);
+      1920 +        wasmOkBtn.disabled = false;
+      1921        } catch (e) {
+      1922 +        showMain();
+      1923          setNote(`✗ Fetch failed: ${e.message}`, 'err');
+      1924        }
+      1925        fetchBtn.disabled = false;
+
+⏺ 最後に wasm results ペインの OK / Back / Cancel ハンドラを追加:
+
+⏺ Update(canvas.js)
+  ⎿  Added 23 lines
+      1962      fetchBtn.disabled = false;
+      1963    });
+      1964
+      1965 +  wasmOkBtn.addEventListener('click', () => {
+      1966 +    const item = pendingPipeItem;
+      1967 +    if (!item) return;
+      1968 +    const n = S.nodes.find(n => n.id === targetNodeId);
+      1969 +    if (!n) { close(); return; }
+      1970 +    n.code = item.code;
+      1971 +    if (typeof item.title === 'string' && item.title) n.title = item.title;
+      1972 +    if (typeof item.lang  === 'string' && item.lang)  n.lang  = item.lang;
+      1973 +    if (typeof item.path  === 'string' && item.path)  n.filePath = item.path;
+      1974 +    if (typeof item.start === 'number' && item.start > 0) {
+      1975 +      n.lineNumberStart = item.start;
+      1976 +      n.showLineNumbers = true;
+      1977 +    }
+      1978 +    if (pendingCtagsName) n.title = pendingCtagsName;
+      1979 +    renderNode(n, ndEl(n.id));
+      1980 +    autoFitNode(n);
+      1981 +    scheduleSave();
+      1982 +    close();
+      1983 +    setStatus('Snippet inserted via /pipe');
+      1984 +  });
+      1985 +
+      1986 +  wasmBackBtn.addEventListener('click', () => { showMain(); });
+      1987 +  wasmCancelBtn.addEventListener('click', close);
+      1988    backBtn.addEventListener('click', showMain);
+      1989    resultsCancelBtn.addEventListener('click', close);
+      1990    cancelBtn.addEventListener('click', close);
+
+⏺ git-form-note に .ok クラスが未定義なので CSS に追加します:
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ .ok はすでにあります。動作フローをまとめます:
+
+  ---
+  変更まとめ
+
+  /pipe Fetch ボタンを押したあとの流れが以下に変わります:
+
+  1. /pipe API 呼び出し → 成功したらメインフォームを隠して wasm結果ペイン を表示
+  2. ペインに「⏳ wasm実行中…」を表示し、ctags-wasm を実行
+  3. 完了したら「✓ wasm実行完了」に更新し、タグ一覧テーブル（name / kind / line / pattern）を表示。OK ボタンが有効化される
+  4. OK → コードブロックに code / lang / filePath / lineNumberStart / タイトル（ctags最初のタグ名）を適用してダイアログを閉じる
+  5. ← Back → メインフォームに戻る（再度 Fetch できる）
+  6. Cancel → 何も変更せず閉じる
+
+✻ Churned for 2m 31s
+
+❯ 「wasm実行完了」その他の日本語メッセージを英語にして
+
+  Searched for 4 patterns (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      1908          pendingCtagsName = null;
+      1909          wasmOkBtn.disabled = true;
+      1910          wasmTableWrap.innerHTML = '';
+      1911 -        setWasmStatus('⏳ wasm実行中…', '');
+      1911 +        setWasmStatus('⏳ Running ctags…', '');
+      1912          showWasmResults();
+      1913          setNote('', '');
+      1914
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      1915          // Run ctags
+      1916          const { firstTagName, tags } = await runCtagsFull(item.code, item.path || 'input');
+      1917          pendingCtagsName = firstTagName;
+      1918 -        setWasmStatus('✓ wasm実行完了', 'ok');
+      1918 +        setWasmStatus('✓ ctags complete', 'ok');
+      1919          buildWasmTable(tags);
+      1920          wasmOkBtn.disabled = false;
+      1921        } catch (e) {
+
+⏺ Done. ⏳ wasm実行中… → ⏳ Running ctags…、✓ wasm実行完了 → ✓ ctags complete に変更しました。
+
+❯ "Running ctags", "ctags complete"のところ、ctagsをctags-wasmに変えて
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      1908          pendingCtagsName = null;
+      1909          wasmOkBtn.disabled = true;
+      1910          wasmTableWrap.innerHTML = '';
+      1911 -        setWasmStatus('⏳ Running ctags…', '');
+      1911 +        setWasmStatus('⏳ Running ctags-wasm…', '');
+      1912          showWasmResults();
+      1913          setNote('', '');
+      1914
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      1915          // Run ctags
+      1916          const { firstTagName, tags } = await runCtagsFull(item.code, item.path || 'input');
+      1917          pendingCtagsName = firstTagName;
+      1918 -        setWasmStatus('✓ ctags complete', 'ok');
+      1918 +        setWasmStatus('✓ ctags-wasm complete', 'ok');
+      1919          buildWasmTable(tags);
+      1920          wasmOkBtn.disabled = false;
+      1921        } catch (e) {
+
+❯ "ctags-wasm complete"のところ、先頭を大文字にして
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      1915          // Run ctags
+      1916          const { firstTagName, tags } = await runCtagsFull(item.code, item.path || 'input');
+      1917          pendingCtagsName = firstTagName;
+      1918 -        setWasmStatus('✓ ctags-wasm complete', 'ok');
+      1918 +        setWasmStatus('✓ Ctags-wasm complete', 'ok');
+      1919          buildWasmTable(tags);
+      1920          wasmOkBtn.disabled = false;
+      1921        } catch (e) {
+```
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して
+
 

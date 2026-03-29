@@ -443,3 +443,10 @@ body.link-mode .node:hover {
 .csd-table tbody td:first-child {
   color: #6e7681; width: 36px; text-align: right;
 }
+#csd-wasm-table-wrap {
+  max-height: 280px; overflow-y: auto;
+  border: 1px solid #30363d; border-radius: 6px; margin-top: 10px; margin-bottom: 10px;
+}
+.csd-wasm-row td { padding: 7px 10px; color: #e6edf3; vertical-align: top; }
+.csd-wasm-row td:first-child { color: #6e7681; width: 36px; text-align: right; }
+.csd-wasm-row { border-top: 1px solid #21262d; }
