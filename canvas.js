@@ -1138,6 +1138,8 @@ function loadState(data) {
   S.links = [];
   S.sel = null;
   S.editing = null;
+  S.multiSel.clear();
+  S.clipboard = [];
   svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
 
   S.nid = data.nid ?? 1;
@@ -1468,6 +1470,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   S.nodes.forEach(n => ndEl(n.id)?.remove());
   S.nodes = []; S.links = []; S.nid = 1; S.lid = 1;
   S.sel = null; S.editing = null;
+  S.multiSel.clear(); S.clipboard = [];
   S.gitConfig = { url: '', branch: '', tag: '', commitHash: '' };
   svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
   svgLinks.querySelectorAll('[data-btail]').forEach(e => e.remove());
@@ -1669,4 +1672,7 @@ setStatus('Ready — double-click to add block | select text to create link | Al
 // ═══════════════════════════════════════════════════════
 // TEST EXPORTS (not used in production)
 // ═══════════════════════════════════════════════════════
-export { S, addNode, removeNode, selectNode, addBubble, loadState };
+export { S, addNode, removeNode, selectNode, addBubble, loadState,
+         saveState, restoreFromStorage,
+         createLink, removeLink,
+         copyNodes, cutNodes, pasteNodes, toggleMultiSel };
