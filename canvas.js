@@ -1725,9 +1725,8 @@ document.getElementById('btn-clear').addEventListener('click', () => {
     if (_ctagsInitProm) return _ctagsInitProm;
     if (typeof CTagsModule === 'undefined') return Promise.resolve(null);
     _ctagsInitProm = CTagsModule({
-      print:       line => { _ctagsCaptured += line + '\n'; },
-      printErr:    ()   => {},
-      wasmBinary:  window.__ctagsWasmBinary,
+      print:    line => { _ctagsCaptured += line + '\n'; },
+      printErr: ()   => {},
     }).then(m => {
       m._ctags_init();
       _ctagsModule = m;
@@ -2041,7 +2040,12 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 // ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
-restoreFromStorage();
+if (window.__initialData) {
+  loadState(window.__initialData);
+  saveState();
+} else {
+  restoreFromStorage();
+}
 
 setStatus('Ready — double-click to add block | select text to create link | Alt+click to delete link');
 

@@ -3635,6 +3635,368 @@ pv_ops.lock.queued_spin_lock_slowpath = __pv_queued_spin_lock_slowpath;
 ✻ Brewed for 52s
 ```
 
+```
+ ▐▛███▜▌   Claude Code v2.1.87
+▝▜█████▛▘  Sonnet 4.6 · Claude Pro
+  ▘▘ ▝▝    ~/devel/src/github.com/orimanabu/code-canvas
+
+❯ 今はfile://canvas.htmlで使っているのですが、CORSエラーを回避するためにWASMをbase64文字列化して読み込んでいると思います(ctags-wasm-binary.js)。これを「何らかの簡易Webサーバを起動
+してcanvas.htmlをサーブする」という方式にすると、WASMバイナリを直接読み込むことができるようになりますか？
+
+  Searched for 5 patterns, read 1 file (ctrl+o to expand)
+
+⏺ はい、できます。
+
+  現在の仕組み
+
+  file:// では fetch() がローカルファイルに対してセキュリティ制限を受けるため、以下の回避策をとっています：
+
+  1. gen-ctags-wasm-binary.js が .wasm を base64 化 → ctags-wasm-binary.js 生成
+  2. canvas.html がこれを <script> で読み込み、window.__ctagsWasmBinary に ArrayBuffer をセット
+  3. canvas.js が wasmBinary: window.__ctagsWasmBinary として Emscripten モジュールに渡す（ctags-wasm.js:3943 で Module['wasmBinary'] を参照）
+
+  Web サーバ経由にすると
+
+  Emscripten 生成の ctags-wasm.js は wasmBinary が未設定の場合、自動的に fetch() で .wasm を取得します（ctags-wasm.js:476）。その際のパスは locateFile
+  で制御できます（ctags-wasm.js:62-64）：
+
+  // wasmBinaryは渡さず、locateFileでパスを指定するだけ
+  const mod = await CTagsModule({
+    locateFile: (path) => `/path/to/ctags-wasm/${path}`
+    // wasmBinary は不要
+  });
+
+  これにより：
+  - ctags-wasm-binary.js（数 MB の base64 ファイル）が不要になる
+  - 初回ロードが高速化される（ブラウザが .wasm をキャッシュ可能）
+  - application/wasm MIME タイプで配信されれば streaming compilation も有効になる
+
+  注意点
+
+  .wasm ファイルの配置場所（ctags-wasm.js からの相対パス、または locateFile で指定するパス）が合っている必要があります。現在の canvas.html では ctags-wasm.js を
+  ../ctags/build-wasm/ から読んでいるため、同ディレクトリに .wasm があればデフォルトの locateFile で自動解決されます。
+
+✻ Crunched for 50s
+
+❯ ではそのように変更してください。適当なスクリプト言語を使って、canvas.htmlをサーブする簡易Webサーバの起動スクリプトもお願いします
+
+⏺ まず関連ファイルを読み込みます。
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ 現在の構造を確認します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 構造を確認しました。Webサーバは orimanabu/ をルートにして http://localhost:PORT/code-canvas/canvas.html で配信するのが自然です（既存の ../ctags/build-wasm/
+  相対パスがそのまま機能します）。
+
+⏺ Update(canvas.html)
+  ⎿  Removed 1 line
+      197  <div id="link-tip">🔗 Create link from here</div>
+      198  <div id="status">Ready</div>
+      199
+      200 -<script src="ctags-wasm-binary.js"></script>
+      200  <script src="../ctags/build-wasm/ctags-wasm.js"></script>
+      201  <script src="canvas.js"></script>
+      202  </body>
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 3 lines
+      1725      if (_ctagsInitProm) return _ctagsInitProm;
+      1726      if (typeof CTagsModule === 'undefined') return Promise.resolve(null);
+      1727      _ctagsInitProm = CTagsModule({
+      1728 -      print:       line => { _ctagsCaptured += line + '\n'; },
+      1729 -      printErr:    ()   => {},
+      1730 -      wasmBinary:  window.__ctagsWasmBinary,
+      1728 +      print:    line => { _ctagsCaptured += line + '\n'; },
+      1729 +      printErr: ()   => {},
+      1730      }).then(m => {
+      1731        m._ctags_init();
+      1732        _ctagsModule = m;
+
+⏺ 次にサーバスクリプトを作成します。
+
+⏺ Write(serve.py)
+  ⎿  Wrote 56 lines to serve.py
+       1 #!/usr/bin/env python3
+       2 """Serve code-canvas from the parent directory so that relative paths like
+       3 ../ctags/build-wasm/ resolve correctly.
+       4
+       5 Usage:
+       6     python3 serve.py [port]   (default port: 8765)
+       7 """
+       8
+       9 import http.server
+      10 import os
+     … +46 lines (ctrl+o to expand)
+
+⏺ Bash(chmod +x /Users/ori/devel/src/github.com/orimanabu/code-canvas/serve.py)
+  ⎿  Done
+
+⏺ 完了です。変更内容をまとめます。
+
+  変更内容
+
+  canvas.html
+  - <script src="ctags-wasm-binary.js"> を削除（base64 バイナリ不要）
+
+  canvas.js
+  - CTagsModule({...}) から wasmBinary: window.__ctagsWasmBinary を削除
+  - Emscripten が ctags-wasm.wasm を自動 fetch() するようになります
+
+  serve.py (新規)
+  - Python 標準ライブラリのみで動作
+  - orimanabu/ をルートに配信（../ctags/build-wasm/ の相対パスがそのまま機能）
+  - .wasm に application/wasm MIME タイプを付与（streaming compilation 有効化）
+  - 起動時にブラウザを自動オープン
+
+  使い方
+
+  cd code-canvas
+  python3 serve.py          # ポート 8765 (デフォルト)
+  python3 serve.py 9000     # ポート指定
+
+  http://localhost:8765/code-canvas/canvas.html が開きます。ctags-wasm-binary.js は不要になりましたが、file:// 向けのフォールバックとして残しておくことも可能です（ensureCtags()
+  内の typeof CTagsModule === 'undefined' チェックで既に undefined 時は graceful に無効化されるため）。
+
+✻ Cogitated for 1m 15s
+
+❯ 簡易Webサーバ起動時に、コマンドラインでExportしたJSONデータファイルのパスを指定すると、そのJSONファイルをImportした状態でcanvasを起動できますか
+
+⏺ まず import/export の実装を確認します。
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ 仕組みを確認しました。方針は：
+
+  - serve.py が JSON ファイルを読み、canvas.html のレスポンスに <script>window.__initialData = {...}</script> を注入
+  - canvas.js の INIT 部分で window.__initialData があれば localStorage より優先して loadState()
+
+  この方式が最もシンプルです。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Write(serve.py)
+  ⎿  Added 76 lines, removed 20 lines
+        3  ../ctags/build-wasm/ resolve correctly.
+        4
+        5  Usage:
+        6 -    python3 serve.py [port]   (default port: 8765)
+        6 +    python3 serve.py [--port PORT] [json_file]
+        7 +
+        8 +Examples:
+        9 +    python3 serve.py                         # start with empty canvas
+       10 +    python3 serve.py my-notes.json           # load JSON on startup
+       11 +    python3 serve.py --port 9000 my-notes.json
+       12  """
+       13
+       14 +import argparse
+       15  import http.server
+       16 +import json
+       17  import os
+       18  import sys
+       19  import threading
+       20  import webbrowser
+       21
+       15 -PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
+       16 -
+       22  # Serve from the directory that contains both code-canvas/ and ctags/
+       18 -SERVE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+       19 -OPEN_PATH  = '/code-canvas/canvas.html'
+       23 +SERVE_ROOT  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+       24 +CANVAS_PATH = '/code-canvas/canvas.html'
+       25 +CANVAS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'canvas.html')
+       26
+       27 +_initial_data_json = None  # JSON string injected into canvas.html, or None
+       28
+       22 -class Handler(http.server.SimpleHTTPRequestHandler):
+       23 -    def __init__(self, *args, **kwargs):
+       24 -        super().__init__(*args, directory=SERVE_ROOT, **kwargs)
+       29
+       26 -    def guess_type(self, path):
+       27 -        if str(path).endswith('.wasm'):
+       28 -            return 'application/wasm'
+       29 -        return super().guess_type(path)
+       30 +def build_handler():
+       31 +    class Handler(http.server.SimpleHTTPRequestHandler):
+       32 +        def __init__(self, *args, **kwargs):
+       33 +            super().__init__(*args, directory=SERVE_ROOT, **kwargs)
+       34
+       31 -    def log_message(self, fmt, *args):
+       32 -        # Show only non-200 responses to keep output clean
+       33 -        code = args[1] if len(args) > 1 else '-'
+       34 -        if code not in ('200', '304'):
+       35 -            super().log_message(fmt, *args)
+       35 +        def do_GET(self):
+       36 +            # Intercept canvas.html to inject __initialData when a JSON file
+       37 +            # was specified on the command line.
+       38 +            if _initial_data_json is not None and self.path.split('?')[0] == CANVAS_PATH:
+       39 +                self._serve_canvas_with_data()
+       40 +            else:
+       41 +                super().do_GET()
+       42
+       43 +        def _serve_canvas_with_data(self):
+       44 +            with open(CANVAS_FILE, 'rb') as f:
+       45 +                html = f.read().decode('utf-8')
+       46
+       47 +            injection = (
+       48 +                f'<script>window.__initialData = {_initial_data_json};</script>\n'
+       49 +            )
+       50 +            html = html.replace('</body>', injection + '</body>', 1)
+       51 +            body = html.encode('utf-8')
+       52 +
+       53 +            self.send_response(200)
+       54 +            self.send_header('Content-Type', 'text/html; charset=utf-8')
+       55 +            self.send_header('Content-Length', str(len(body)))
+       56 +            self.end_headers()
+       57 +            self.wfile.write(body)
+       58 +
+       59 +        def guess_type(self, path):
+       60 +            if str(path).endswith('.wasm'):
+       61 +                return 'application/wasm'
+       62 +            return super().guess_type(path)
+       63 +
+       64 +        def log_message(self, fmt, *args):
+       65 +            # Show only non-200/304 responses to keep output clean
+       66 +            code = args[1] if len(args) > 1 else '-'
+       67 +            if code not in ('200', '304'):
+       68 +                super().log_message(fmt, *args)
+       69 +
+       70 +    return Handler
+       71 +
+       72 +
+       73  def open_browser(url):
+       74      import time
+       75      time.sleep(0.4)
+       76      webbrowser.open(url)
+       77
+       78
+       44 -if __name__ == '__main__':
+       45 -    url = f'http://localhost:{PORT}{OPEN_PATH}'
+       79 +def main():
+       80 +    global _initial_data_json
+       81 +
+       82 +    parser = argparse.ArgumentParser(description=__doc__,
+       83 +                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+       84 +    parser.add_argument('--port', type=int, default=8765, metavar='PORT',
+       85 +                        help='port to listen on (default: 8765)')
+       86 +    parser.add_argument('json_file', nargs='?', metavar='json_file',
+       87 +                        help='exported canvas JSON file to load on startup')
+       88 +    args = parser.parse_args()
+       89 +
+       90 +    if args.json_file:
+       91 +        path = os.path.abspath(args.json_file)
+       92 +        with open(path) as f:
+       93 +            data = json.load(f)          # validate JSON
+       94 +        _initial_data_json = json.dumps(data)
+       95 +        print(f'Data : {path}')
+       96 +
+       97 +    url = f'http://localhost:{args.port}{CANVAS_PATH}'
+       98      print(f'Root : {SERVE_ROOT}')
+       99      print(f'Open : {url}')
+      100      print('Press Ctrl-C to stop.\n')
+      101
+      102      threading.Thread(target=open_browser, args=(url,), daemon=True).start()
+      103
+       52 -    with http.server.HTTPServer(('', PORT), Handler) as httpd:
+      104 +    with http.server.HTTPServer(('', args.port), build_handler()) as httpd:
+      105          try:
+      106              httpd.serve_forever()
+      107          except KeyboardInterrupt:
+      108              print('\nStopped.')
+      109 +
+      110 +
+      111 +if __name__ == '__main__':
+      112 +    main()
+
+⏺ 次に canvas.js の INIT 部分を修正します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 6 lines, removed 1 line
+      2040  // ═══════════════════════════════════════════════════════
+      2041  // INIT
+      2042  // ═══════════════════════════════════════════════════════
+      2043 -restoreFromStorage();
+      2043 +if (window.__initialData) {
+      2044 +  loadState(window.__initialData);
+      2045 +  saveState();
+      2046 +} else {
+      2047 +  restoreFromStorage();
+      2048 +}
+      2049
+      2050  setStatus('Ready — double-click to add block | select text to create link | Alt+click to delete link');
+      2051
+
+⏺ 動作確認のため、構文を簡単にチェックします。
+
+⏺ Bash(python3 -c "import ast; ast.parse(open('serve.py').read()); print('serve.py: OK')" && node --input-type=module < <(echo "import './canvas.js'" 2>&1) || node -e…)
+  ⎿  serve.py: OK
+     file:///Users/ori/devel/src/github.com/orimanabu/code-canvas/canvas.js:230
+     const wrap      = document.getElementById('wrap');
+     … +12 lines (ctrl+o to expand)
+
+⏺ document is not defined は Node.js でブラウザ用スクリプトを実行した際の想定内エラーです。syntax OK が出ているので問題ありません。
+
+  使い方
+
+  # 空のキャンバスで起動
+  python3 serve.py
+
+  # JSONファイルを指定して起動（自動でImport）
+  python3 serve.py my-notes.json
+
+  # ポート指定 + JSONファイル
+  python3 serve.py --port 9000 my-notes.json
+
+  動作の仕組み
+
+  1. serve.py がブラウザから canvas.html のリクエストを受けると、</body> の直前に以下を注入します：
+  <script>window.__initialData = { "nodes": [...], "links": [...], ... };</script>
+  2. canvas.js の起動時に window.__initialData があれば loadState() してから saveState()（localStorage にも書き込み）。なければ従来通り localStorage から復元します。
+  3. JSON ファイルは起動時に Python 側で json.load() してバリデーション済みです。
+
+✻ Worked for 1m 8s
+
+❯ `python3 serve.py my-notes.json` しても、jsonデータがimportされませんでした。調査お願いします
+
+⏺ canvas.html の末尾と、注入位置の関係を確認します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 原因が分かりました。
+
+  バグ: </body> の直前に注入しているため、window.__initialData が設定される <script> タグが canvas.js より後に来てしまっています。canvas.js の INIT コードが実行される時点では
+  __initialData はまだ undefined です。
+
+  注入箇所を <script src="canvas.js"> の前に変更します。
+
+⏺ Update(serve.py)
+  ⎿  Added 1 line, removed 1 line
+      47              injection = (
+      48                  f'<script>window.__initialData = {_initial_data_json};</script>\n'
+      49              )
+      50 -            html = html.replace('</body>', injection + '</body>', 1)
+      50 +            html = html.replace('<script src="canvas.js">', injection + '<script src="canvas.js">', 1)
+      51              body = html.encode('utf-8')
+      52
+      53              self.send_response(200)
+
+⏺ これで canvas.js が実行される前に window.__initialData がセットされます。
+
+  HTMLの順序がどう変わるか確認：
+
+  修正前（canvas.js より後）
+  <script src="canvas.js"></script>
+  <script>window.__initialData = {...};</script>  ← canvas.js 実行済み、手遅れ
+  </body>
+
+  修正後（canvas.js より前）
+  <script>window.__initialData = {...};</script>  ← 先にセット
+  <script src="canvas.js"></script>               ← INIT 時に参照できる
+  </body>
+```
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して
