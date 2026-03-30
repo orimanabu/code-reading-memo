@@ -113,12 +113,9 @@
         <label class="git-form-label" for="csd-endpoint">API Endpoint</label>
         <input class="git-form-input" id="csd-endpoint" type="text" value="localhost:8999" spellcheck="false" autocomplete="off">
       </div>
-      <div class="git-form-row">
-        <label class="git-form-label" for="csd-api-type">API Type</label>
-        <select class="git-form-input" id="csd-api-type">
-          <option value="snippets">/snippets</option>
-          <option value="pipe">/pipe</option>
-        </select>
+      <div class="csd-tabs" id="csd-api-tabs">
+        <button class="csd-tab active" data-value="snippets">/snippets</button>
+        <button class="csd-tab" data-value="pipe">/pipe</button>
       </div>
       <div class="git-form-row">
         <label class="git-form-label" for="csd-use-ctags"></label>

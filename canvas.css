@@ -418,6 +418,25 @@ body.link-mode .node:hover {
 
 /* ── Codesnippetd Dialog ── */
 .csd-dialog { width: 560px; }
+.csd-tabs {
+  display: flex;
+  border-bottom: 1px solid #30363d;
+  margin-bottom: 14px;
+}
+.csd-tab {
+  padding: 7px 18px;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #8b949e;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.csd-tab:hover { color: #e6edf3; }
+.csd-tab.active { color: #e6edf3; border-bottom-color: #388bfd; }
 #csd-table-wrap {
   max-height: 280px; overflow-y: auto;
   border: 1px solid #30363d; border-radius: 6px; margin-bottom: 10px;

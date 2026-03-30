@@ -1680,8 +1680,9 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 (function () {
   const overlay          = document.getElementById('codesnippetd-dialog-overlay');
   const endpointEl       = document.getElementById('csd-endpoint');
-  const apiTypeEl        = document.getElementById('csd-api-type');
+  const apiTabsEl        = document.getElementById('csd-api-tabs');
   const useCtagsEl       = document.getElementById('csd-use-ctags');
+  let   currentApiType   = 'snippets';
   const contextEl        = document.getElementById('csd-context');
   const keywordEl        = document.getElementById('csd-keyword');
   const noteEl           = document.getElementById('csd-note');
@@ -1749,17 +1750,23 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   // ───────────────────────────────────────────────────────────────────
 
   function updateApiTypeUI() {
-    const isPipe = apiTypeEl.value === 'pipe';
+    const isPipe = currentApiType === 'pipe';
     contextEl.disabled = isPipe;
     keywordEl.disabled = isPipe;
-    contextEl.style.opacity = isPipe ? '0.4' : '';
-    keywordEl.style.opacity = isPipe ? '0.4' : '';
+    contextEl.closest('.git-form-row').style.opacity = isPipe ? '0.4' : '';
+    keywordEl.closest('.git-form-row').style.opacity = isPipe ? '0.4' : '';
     useCtagsEl.disabled = !isPipe;
     useCtagsEl.parentElement.style.opacity = isPipe ? '' : '0.4';
     fetchBtn.disabled = false;
   }
 
-  apiTypeEl.addEventListener('change', updateApiTypeUI);
+  apiTabsEl.addEventListener('click', e => {
+    const tab = e.target.closest('.csd-tab');
+    if (!tab) return;
+    currentApiType = tab.dataset.value;
+    apiTabsEl.querySelectorAll('.csd-tab').forEach(t => t.classList.toggle('active', t === tab));
+    updateApiTypeUI();
+  });
 
   function setNote(msg, type) {
     noteEl.textContent = msg;
@@ -1826,7 +1833,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
     updateApiTypeUI();
     showMain();
     overlay.style.display = 'flex';
-    if (apiTypeEl.value !== 'pipe') keywordEl.focus();
+    if (currentApiType !== 'pipe') keywordEl.focus();
   };
 
   async function fetchAndInsert(endpoint, keyword, index) {
@@ -1897,7 +1904,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
     const endpoint = endpointEl.value.trim();
     if (!endpoint) { setNote('⚠ API Endpoint is required.', 'err'); return; }
 
-    if (apiTypeEl.value === 'pipe') {
+    if (currentApiType === 'pipe') {
       fetchBtn.disabled = true;
       setNote('⏳ Fetching…', '');
       try {
