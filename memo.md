@@ -3997,6 +3997,236 @@ pv_ops.lock.queued_spin_lock_slowpath = __pv_queued_spin_lock_slowpath;
   </body>
 ```
 
+```
+❯ serve.pyの使い方について、README.mdに記載してください
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+⏺ 英語・日本語それぞれの README に追記します。
+
+⏺ Update(README.md)
+  ⎿  Added 21 lines
+      15  - **Save / Load**: Export and import as JSON.
+      16
+      17
+      18 +# Running the Web Server
+      19 +
+      20 +`serve.py` starts a local HTTP server so that the WASM binary (`ctags-wasm.wasm`) can be loaded directly by the browser, without the CORS restrictions of the `file
+         +://` protocol.
+      21 +
+      22 +**Requirements**: Python 3 (standard library only, no extra packages needed)
+      23 +
+      24 +```bash
+      25 +# Start with an empty canvas
+      26 +python3 serve.py
+      27 +
+      28 +# Load a previously exported JSON file on startup
+      29 +python3 serve.py my-notes.json
+      30 +
+      31 +# Specify a custom port (default: 8765)
+      32 +python3 serve.py --port 9000 my-notes.json
+      33 +```
+      34 +
+      35 +The server opens `http://localhost:8765/code-canvas/canvas.html` in the browser automatically.
+      36 +
+      37 +When a JSON file is specified, its contents are loaded into the canvas on startup and also written to `localStorage`, so the state is preserved across page refresh
+         +es.
+      38 +
+      39  # JSON Output Format
+      40
+      41  ## Top level
+
+⏺ Update(README.ja.md)
+  ⎿  Added 21 lines
+      15  - **保存 / 読み込み**: JSONとしてエクスポート・インポートできます。
+      16
+      17
+      18 +# Webサーバの起動
+      19 +
+      20 +`serve.py` はローカルHTTPサーバを起動します。`file://` プロトコルのCORS制限を回避し、WASMバイナリ（`ctags-wasm.wasm`）をブラウザから直接読み込めるようにします。
+      21 +
+      22 +**必要なもの**: Python 3（追加パッケージ不要、標準ライブラリのみ）
+      23 +
+      24 +```bash
+      25 +# 空のキャンバスで起動
+      26 +python3 serve.py
+      27 +
+      28 +# 起動時にエクスポート済みのJSONファイルを読み込む
+      29 +python3 serve.py my-notes.json
+      30 +
+      31 +# ポートを指定する（デフォルト: 8765）
+      32 +python3 serve.py --port 9000 my-notes.json
+      33 +```
+      34 +
+      35 +サーバ起動時にブラウザが自動で `http://localhost:8765/code-canvas/canvas.html` を開きます。
+      36 +
+      37 +JSONファイルを指定した場合、その内容は起動時にキャンバスへ読み込まれ、`localStorage` にも書き込まれます。そのためページをリロードしても状態が保持されます。
+      38 +
+      39  # JSON出力フォーマット
+      40
+      41  ## トップレベル
+
+⏺ 両方の README に「Webサーバの起動 / Running the Web Server」セクションを追加しました。記載内容：
+
+  - 必要環境（Python 3、追加パッケージ不要）
+  - 3パターンの使用例（空起動 / JSON指定 / ポート指定）
+  - ブラウザ自動オープンの説明
+  - JSONファイル指定時の動作（localStorage への書き込みによるリロード時の状態保持）
+
+✻ Cooked for 31s
+
+❯ serve.pyをGo言語で書き直してください
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Bash(which go && go version)
+  ⎿  /Users/ori/.local/share/mise/installs/go/1.24.6/bin/go
+     go version go1.24.6 darwin/arm64
+
+⏺ Write(serve.go)
+  ⎿  Wrote 134 lines to serve.go
+       1 // serve.go — Simple HTTP server for code-canvas.
+       2 //
+       3 // Serves from the parent directory so that relative paths like
+       4 // ../ctags/build-wasm/ resolve correctly.
+       5 //
+       6 // Usage:
+       7 //
+       8 //     go run serve.go [--port PORT] [json_file]
+       9 //
+      10 // Examples:
+     … +124 lines (ctrl+o to expand)
+
+⏺ コンパイルと動作を確認します。
+
+⏺ Bash(go build -o serve serve.go 2>&1)
+  ⎿  (No output)
+
+⏺ Bash(./serve --help 2>&1; rm serve)
+  ⎿  Usage of ./serve:
+       -port int
+                port to listen on (default 8765)
+
+⏺ ビルド・動作確認できました。README も更新します。
+
+⏺ Update(README.md)
+  ⎿  Added 9 lines, removed 5 lines
+      19
+      20  `serve.py` starts a local HTTP server so that the WASM binary (`ctags-wasm.wasm`) can be loaded directly by the browser, without the CORS restrictions of the `file
+          ://` protocol.
+      21
+      22 -**Requirements**: Python 3 (standard library only, no extra packages needed)
+      22 +**Requirements**: Go 1.21+ (no external dependencies)
+      23
+      24  ```bash
+      25 -# Start with an empty canvas
+      26 -python3 serve.py
+      25 +# Run directly with go run
+      26 +go run serve.go
+      27
+      28 +# Or build a binary first
+      29 +go build -o serve serve.go
+      30 +./serve
+      31 +
+      32  # Load a previously exported JSON file on startup
+      29 -python3 serve.py my-notes.json
+      33 +go run serve.go my-notes.json
+      34
+      35  # Specify a custom port (default: 8765)
+      32 -python3 serve.py --port 9000 my-notes.json
+      36 +go run serve.go --port 9000 my-notes.json
+      37  ```
+      38
+      39  The server opens `http://localhost:8765/code-canvas/canvas.html` in the browser automatically.
+
+⏺ Update(README.ja.md)
+  ⎿  Added 9 lines, removed 5 lines
+      19
+      20  `serve.py` はローカルHTTPサーバを起動します。`file://` プロトコルのCORS制限を回避し、WASMバイナリ（`ctags-wasm.wasm`）をブラウザから直接読み込めるようにします。
+      21
+      22 -**必要なもの**: Python 3（追加パッケージ不要、標準ライブラリのみ）
+      22 +**必要なもの**: Go 1.21+（外部依存なし）
+      23
+      24  ```bash
+      25 -# 空のキャンバスで起動
+      26 -python3 serve.py
+      25 +# go run で直接実行する
+      26 +go run serve.go
+      27
+      28 +# またはバイナリをビルドしてから実行する
+      29 +go build -o serve serve.go
+      30 +./serve
+      31 +
+      32  # 起動時にエクスポート済みのJSONファイルを読み込む
+      29 -python3 serve.py my-notes.json
+      33 +go run serve.go my-notes.json
+      34
+      35  # ポートを指定する（デフォルト: 8765）
+      32 -python3 serve.py --port 9000 my-notes.json
+      36 +go run serve.go --port 9000 my-notes.json
+      37  ```
+      38
+      39  サーバ起動時にブラウザが自動で `http://localhost:8765/code-canvas/canvas.html` を開きます。
+
+⏺ 完了です。
+
+  変更内容
+
+  serve.go (新規、serve.py と同等の機能)
+  - net/http 標準ライブラリのみ使用、外部依存なし
+  - runtime.Caller(0) でソースファイルの場所からパスを解決（go run でも go build 後のバイナリでも正しく動作）
+  - .wasm に application/wasm を付与、canvas.html への __initialData 注入、ブラウザ自動オープン（macOS/Linux/Windows 対応）はすべて実装済み
+  - flag パッケージで --port オプション、位置引数で JSON ファイルを受け取る
+
+  README.md / README.ja.md: Python → Go の使い方に更新
+
+✻ Sautéed for 1m 15s
+
+❯ `go run serve.go data.json` でブラウザを開くとdata.jsonがロードされた状態で開きますが、ここでClearボタンを押すと表示上は空っぽになりますが、ブラウザの再ロードするとdata.jsonがIm
+portされた状態になります。期待する動作は、Clearボタンを押してブラウザをリロードしても空の状態になることです
+
+⏺ Clear ボタンの実装と現在の INIT コードを確認します。
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ 原因が分かりました。
+
+  問題: リロードのたびにサーバが __initialData を注入するので、INIT で loadState() → saveState() が毎回実行され、Clear で空にした localStorage を上書きしてしまいます。
+
+  修正方針: sessionStorage を使い、同一タブセッション内で __initialData を読み込み済みかどうかを記録します。
+  - 初回ロード → __initialData を読み込み、フラグをセット
+  - Clear 後のリロード → フラグあり → localStorage を使う（空のまま）
+  - 新しいタブ → sessionStorage はリセット → __initialData を再度読み込む
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 1 line
+      2040  // ═══════════════════════════════════════════════════════
+      2041  // INIT
+      2042  // ═══════════════════════════════════════════════════════
+      2043 -if (window.__initialData) {
+      2043 +if (window.__initialData && !sessionStorage.getItem('canvas-initial-loaded')) {
+      2044 +  sessionStorage.setItem('canvas-initial-loaded', '1');
+      2045    loadState(window.__initialData);
+      2046    saveState();
+      2047  } else {
+
+⏺ 修正後の動作：
+
+  ┌────────────────────────────┬───────────────────────────────────────────────────────────┐
+  │            操作            │                           動作                            │
+  ├────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ 初回ロード（JSON指定あり） │ __initialData を読み込み、sessionStorage にフラグをセット │
+  ├────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ リロード（フラグあり）     │ localStorage を使用（編集内容が保持される）               │
+  ├────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ Clear → リロード           │ フラグあり → localStorage を使用（空のまま） ✓            │
+  ├────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ 新しいタブ                 │ sessionStorage リセット → __initialData を再度読み込む    │
+  └────────────────────────────┴───────────────────────────────────────────────────────────┘
+
+✻ Crunched for 50s
+```
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して

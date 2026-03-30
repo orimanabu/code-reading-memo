@@ -19,17 +19,21 @@
 
 `serve.py` はローカルHTTPサーバを起動します。`file://` プロトコルのCORS制限を回避し、WASMバイナリ（`ctags-wasm.wasm`）をブラウザから直接読み込めるようにします。
 
-**必要なもの**: Python 3（追加パッケージ不要、標準ライブラリのみ）
+**必要なもの**: Go 1.21+（外部依存なし）
 
 ```bash
-# 空のキャンバスで起動
-python3 serve.py
+# go run で直接実行する
+go run serve.go
+
+# またはバイナリをビルドしてから実行する
+go build -o serve serve.go
+./serve
 
 # 起動時にエクスポート済みのJSONファイルを読み込む
-python3 serve.py my-notes.json
+go run serve.go my-notes.json
 
 # ポートを指定する（デフォルト: 8765）
-python3 serve.py --port 9000 my-notes.json
+go run serve.go --port 9000 my-notes.json
 ```
 
 サーバ起動時にブラウザが自動で `http://localhost:8765/code-canvas/canvas.html` を開きます。

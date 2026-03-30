@@ -2040,7 +2040,8 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 // ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
-if (window.__initialData) {
+if (window.__initialData && !sessionStorage.getItem('canvas-initial-loaded')) {
+  sessionStorage.setItem('canvas-initial-loaded', '1');
   loadState(window.__initialData);
   saveState();
 } else {
