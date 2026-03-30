@@ -15,6 +15,27 @@ A browser-based tool for reading and understanding source code. Visually organiz
 - **Save / Load**: Export and import as JSON.
 
 
+# Running the Web Server
+
+`serve.py` starts a local HTTP server so that the WASM binary (`ctags-wasm.wasm`) can be loaded directly by the browser, without the CORS restrictions of the `file://` protocol.
+
+**Requirements**: Python 3 (standard library only, no extra packages needed)
+
+```bash
+# Start with an empty canvas
+python3 serve.py
+
+# Load a previously exported JSON file on startup
+python3 serve.py my-notes.json
+
+# Specify a custom port (default: 8765)
+python3 serve.py --port 9000 my-notes.json
+```
+
+The server opens `http://localhost:8765/code-canvas/canvas.html` in the browser automatically.
+
+When a JSON file is specified, its contents are loaded into the canvas on startup and also written to `localStorage`, so the state is preserved across page refreshes.
+
 # JSON Output Format
 
 ## Top level

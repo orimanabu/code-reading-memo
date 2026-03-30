@@ -15,6 +15,27 @@
 - **保存 / 読み込み**: JSONとしてエクスポート・インポートできます。
 
 
+# Webサーバの起動
+
+`serve.py` はローカルHTTPサーバを起動します。`file://` プロトコルのCORS制限を回避し、WASMバイナリ（`ctags-wasm.wasm`）をブラウザから直接読み込めるようにします。
+
+**必要なもの**: Python 3（追加パッケージ不要、標準ライブラリのみ）
+
+```bash
+# 空のキャンバスで起動
+python3 serve.py
+
+# 起動時にエクスポート済みのJSONファイルを読み込む
+python3 serve.py my-notes.json
+
+# ポートを指定する（デフォルト: 8765）
+python3 serve.py --port 9000 my-notes.json
+```
+
+サーバ起動時にブラウザが自動で `http://localhost:8765/code-canvas/canvas.html` を開きます。
+
+JSONファイルを指定した場合、その内容は起動時にキャンバスへ読み込まれ、`localStorage` にも書き込まれます。そのためページをリロードしても状態が保持されます。
+
 # JSON出力フォーマット
 
 ## トップレベル
