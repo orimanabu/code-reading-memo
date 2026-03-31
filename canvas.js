@@ -64,6 +64,20 @@ function langFromPath(filePath) {
   return ext ? (EXT_LANG[ext] ?? null) : null;
 }
 
+// ═══════════════════════════════════════════════════════
+// COLOR PALETTE
+// ═══════════════════════════════════════════════════════
+const NODE_COLORS = [
+  { id: 'blue',   label: 'Blue',   hex: '#388bfd', hexLight: '#79c0ff', bgDark: '#0d1f40', bgMid: '#122040', borderMid: '#1b3f7a', titleBg: 'rgba(56,139,253,0.15)',  glow28: 'rgba(56,139,253,0.28)',  glow42: 'rgba(56,139,253,0.42)' },
+  { id: 'green',  label: 'Green',  hex: '#3fb950', hexLight: '#56d364', bgDark: '#162116', bgMid: '#1b2e1b', borderMid: '#2d4a2d', titleBg: 'rgba(63,185,80,0.15)',   glow28: 'rgba(63,185,80,0.28)',   glow42: 'rgba(63,185,80,0.42)' },
+  { id: 'purple', label: 'Purple', hex: '#a371f7', hexLight: '#bc8cff', bgDark: '#1a1035', bgMid: '#211444', borderMid: '#3d2870', titleBg: 'rgba(163,113,247,0.15)', glow28: 'rgba(163,113,247,0.28)', glow42: 'rgba(163,113,247,0.42)' },
+  { id: 'orange', label: 'Orange', hex: '#f0883e', hexLight: '#ffa657', bgDark: '#291608', bgMid: '#33190a', borderMid: '#5c3612', titleBg: 'rgba(240,136,62,0.15)',  glow28: 'rgba(240,136,62,0.28)',  glow42: 'rgba(240,136,62,0.42)' },
+  { id: 'yellow', label: 'Yellow', hex: '#e3b341', hexLight: '#f2c55a', bgDark: '#231a05', bgMid: '#2c2107', borderMid: '#4a3a0e', titleBg: 'rgba(227,179,65,0.15)',  glow28: 'rgba(227,179,65,0.28)',  glow42: 'rgba(227,179,65,0.42)' },
+  { id: 'red',    label: 'Red',    hex: '#f85149', hexLight: '#ff7b72', bgDark: '#290d0c', bgMid: '#361110', borderMid: '#6a2020', titleBg: 'rgba(248,81,73,0.15)',   glow28: 'rgba(248,81,73,0.28)',   glow42: 'rgba(248,81,73,0.42)' },
+  { id: 'cyan',   label: 'Cyan',   hex: '#39c5cf', hexLight: '#56d4dd', bgDark: '#061a1d', bgMid: '#092227', borderMid: '#144a50', titleBg: 'rgba(57,197,207,0.15)',  glow28: 'rgba(57,197,207,0.28)',  glow42: 'rgba(57,197,207,0.42)' },
+  { id: 'pink',   label: 'Pink',   hex: '#f778ba', hexLight: '#ff9ed2', bgDark: '#29091b', bgMid: '#360d24', borderMid: '#6a2050', titleBg: 'rgba(247,120,186,0.15)', glow28: 'rgba(247,120,186,0.28)', glow42: 'rgba(247,120,186,0.42)' },
+];
+
 // Replace first occurrence of `rawText` in HTML string, only inside text nodes (outside tags)
 function injectAnchor(html, rawText, linkId) {
   const pat = rawText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -311,6 +325,39 @@ function buildCodeHTML(code, nodeId) {
 }
 
 // ═══════════════════════════════════════════════════════
+// COLOR HELPERS
+// ═══════════════════════════════════════════════════════
+function colorSwatchesHTML(currentColor, defaultId) {
+  const active = currentColor ?? defaultId;
+  return `<div class="color-swatches">${
+    NODE_COLORS.map(c =>
+      `<span class="color-swatch${c.id === active ? ' active' : ''}" data-color="${c.id}" style="background:${c.hex}" title="${c.label}"></span>`
+    ).join('')
+  }</div>`;
+}
+
+function applyNodeColor(n, el) {
+  if (n.type === 'bubble') {
+    const c = NODE_COLORS.find(c => c.id === (n.color ?? 'green')) ?? NODE_COLORS.find(c => c.id === 'green');
+    el.style.setProperty('--bn-bg',         c.bgDark);
+    el.style.setProperty('--bn-border',     c.hex);
+    el.style.setProperty('--bn-border-sel', c.hexLight);
+    el.style.setProperty('--bn-glow-sel',   c.glow28);
+    el.style.setProperty('--bn-glow-msel',  c.glow42);
+    el.style.setProperty('--bh-bg',         c.bgMid);
+    el.style.setProperty('--bh-border',     c.borderMid);
+  } else {
+    const c = NODE_COLORS.find(c => c.id === (n.color ?? 'blue')) ?? NODE_COLORS.find(c => c.id === 'blue');
+    el.style.setProperty('--na',        c.hex);
+    el.style.setProperty('--na-bg',     c.titleBg);
+    el.style.setProperty('--nb',        c.borderMid);
+    el.style.setProperty('--nb-sel',    c.hex);
+    el.style.setProperty('--nb-glow',   c.glow28);
+    el.style.setProperty('--nb-glow-m', c.glow42);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // NODE RENDERING
 // ═══════════════════════════════════════════════════════
 function ndEl(id) { return document.getElementById('nd-' + id); }
@@ -322,6 +369,7 @@ function addNode(x, y, code) {
     lang: 'javascript',
     title: '', filePath: '',
     showLineNumbers: true, lineNumberStart: 1,
+    color: 'blue',
   };
   S.nodes.push(n);
   const el = document.createElement('div');
@@ -348,6 +396,7 @@ function renderNode(n, el) {
   el.style.height = n.h + 'px';
   el.classList.toggle('selected', S.sel === n.id);
   el.classList.toggle('multi-selected', S.multiSel.has(n.id));
+  applyNodeColor(n, el);
 
   if (n.type === 'bubble') {
     renderBubbleContent(n, el);
@@ -373,6 +422,17 @@ function renderNode(n, el) {
     });
     el.querySelector('.btn-del').addEventListener('click', e => {
       e.stopPropagation(); removeNode(n.id);
+    });
+    el.querySelectorAll('.color-swatch').forEach(sw => {
+      sw.addEventListener('mousedown', e => e.stopPropagation());
+      sw.addEventListener('click', e => {
+        e.stopPropagation();
+        n.color = sw.dataset.color;
+        applyNodeColor(n, el);
+        el.querySelectorAll('.color-swatch').forEach(s =>
+          s.classList.toggle('active', s.dataset.color === n.color));
+        scheduleSave();
+      });
     });
     ta.focus();
   } else {
@@ -520,6 +580,7 @@ function bubbleEditHTML(n) {
   return `
   <div class="bubble-header">
     <div class="node-actions" style="opacity:1">
+      ${colorSwatchesHTML(n.color, 'green')}
       <button class="node-btn btn-done">✓ Done</button>
       <button class="node-btn danger btn-del">Delete</button>
     </div>
@@ -538,6 +599,17 @@ function renderBubbleContent(n, el) {
     ta.addEventListener('input', () => { n.text = ta.value; });
     el.querySelector('.btn-done').addEventListener('click', e => { e.stopPropagation(); stopEdit(); });
     el.querySelector('.btn-del').addEventListener('click', e => { e.stopPropagation(); removeNode(n.id); });
+    el.querySelectorAll('.color-swatch').forEach(sw => {
+      sw.addEventListener('mousedown', e => e.stopPropagation());
+      sw.addEventListener('click', e => {
+        e.stopPropagation();
+        n.color = sw.dataset.color;
+        applyNodeColor(n, el);
+        el.querySelectorAll('.color-swatch').forEach(s =>
+          s.classList.toggle('active', s.dataset.color === n.color));
+        scheduleSave();
+      });
+    });
     ta.focus();
   } else {
     el.innerHTML = bubbleViewHTML(n);
@@ -579,12 +651,13 @@ function renderBubbleTail(n) {
   const strokeD = `M ${p1.x},${p1.y} Q ${cp1.x},${cp1.y} ${tip.x},${tip.y} Q ${cp2.x},${cp2.y} ${p2.x},${p2.y}`;
 
   const isSelected = S.sel === n.id || S.multiSel.has(n.id);
-  const stroke = isSelected ? '#56d364' : '#3fb950';
+  const _tc = NODE_COLORS.find(c => c.id === (n.color ?? 'green')) ?? NODE_COLORS.find(c => c.id === 'green');
+  const stroke = isSelected ? _tc.hexLight : _tc.hex;
 
   const g = svgE('g', { 'data-btail': n.id });
   g.appendChild(svgE('path', {
     class: 'bubble-tail-poly',
-    d: fillD, fill: 'rgba(22,33,22,0.8)', stroke: 'none',
+    d: fillD, fill: _tc.bgDark + 'cc', stroke: 'none',
   }));
   g.appendChild(svgE('path', {
     class: 'bubble-tail-poly',
@@ -595,7 +668,7 @@ function renderBubbleTail(n) {
   const handle = svgE('circle', {
     class: 'tail-handle',
     cx: tip.x, cy: tip.y, r: '6',
-    fill: '#3fb950', stroke: '#0d1117', 'stroke-width': '1.5',
+    fill: _tc.hex, stroke: '#0d1117', 'stroke-width': '1.5',
   });
   handle.addEventListener('mousedown', e => {
     e.stopPropagation(); e.preventDefault();
@@ -612,6 +685,7 @@ function addBubble(x, y) {
     x, y, w: 200, h: 100,
     text: '',
     tailX: x + 100, tailY: y + 140,
+    color: 'green',
   };
   S.nodes.push(n);
   const el = document.createElement('div');
@@ -635,6 +709,7 @@ function editHTML(n) {
       <input class="inp-filepath" placeholder="File path (e.g. src/utils/helper.ts)" value="${esc(n.filePath ?? '')}" spellcheck="false">
     </div>
     <div class="node-actions" style="opacity:1">
+      ${colorSwatchesHTML(n.color, 'blue')}
       <span class="lang-badge">${esc(n.lang)}</span>
       <button class="node-btn btn-done">✓ Done</button>
       <button class="node-btn danger btn-del">Delete</button>
@@ -1312,11 +1387,11 @@ function saveState() {
     canvasTitle: canvasTitleEl.value,
     nodes: S.nodes.map(n => {
       if (n.type === 'bubble') {
-        const { id, type, x, y, w, h, text, tailX, tailY } = n;
-        return { id, type, x, y, w, h, text, tailX, tailY };
+        const { id, type, x, y, w, h, text, tailX, tailY, color } = n;
+        return { id, type, x, y, w, h, text, tailX, tailY, color };
       }
-      const { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart } = n;
-      return { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart };
+      const { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color } = n;
+      return { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color };
     }),
     links: S.links.map(({ id, fromId, text, toId }) => ({ id, fromId, text, toId })),
     nid: S.nid,
@@ -1362,11 +1437,13 @@ function loadState(data) {
     let n;
     if (nd.type === 'bubble') {
       n = { id: nd.id, type: 'bubble', x: nd.x, y: nd.y, w: nd.w, h: nd.h,
-            text: nd.text ?? '', tailX: nd.tailX ?? nd.x + nd.w / 2, tailY: nd.tailY ?? nd.y + nd.h + 50 };
+            text: nd.text ?? '', tailX: nd.tailX ?? nd.x + nd.w / 2, tailY: nd.tailY ?? nd.y + nd.h + 50,
+            color: nd.color ?? 'green' };
     } else {
       n = { id: nd.id, x: nd.x, y: nd.y, w: nd.w, h: nd.h, code: nd.code,
             lang: nd.lang ?? 'text', title: nd.title ?? '', filePath: nd.filePath ?? '',
-            showLineNumbers: nd.showLineNumbers ?? true, lineNumberStart: nd.lineNumberStart ?? 1 };
+            showLineNumbers: nd.showLineNumbers ?? true, lineNumberStart: nd.lineNumberStart ?? 1,
+            color: nd.color ?? 'blue' };
     }
     S.nodes.push(n);
     const el = document.createElement('div');

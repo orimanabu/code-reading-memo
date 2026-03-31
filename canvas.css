@@ -32,7 +32,7 @@ body {
   position: absolute;
   display: flex; flex-direction: column;
   background: #161b22;
-  border: 1px solid #30363d;
+  border: 1px solid var(--nb, #30363d);
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.55);
   min-width: 260px; min-height: 120px;
@@ -40,12 +40,12 @@ body {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .node.selected {
-  border-color: #388bfd;
-  box-shadow: 0 0 0 3px rgba(56,139,253,0.22), 0 8px 32px rgba(0,0,0,0.55);
+  border-color: var(--nb-sel, #388bfd);
+  box-shadow: 0 0 0 3px var(--nb-glow, rgba(56,139,253,0.22)), 0 8px 32px rgba(0,0,0,0.55);
 }
 .node.multi-selected {
-  border-color: #388bfd;
-  box-shadow: 0 0 0 3px rgba(56,139,253,0.35), 0 8px 32px rgba(0,0,0,0.55);
+  border-color: var(--nb-sel, #388bfd);
+  box-shadow: 0 0 0 3px var(--nb-glow-m, rgba(56,139,253,0.35)), 0 8px 32px rgba(0,0,0,0.55);
 }
 .node.dragging {
   opacity: 0.5;
@@ -97,8 +97,8 @@ body {
 .node-title {
   font-size: 13px; font-weight: 700; color: #e6edf3;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  background: rgba(56,139,253,0.15);
-  border-left: 3px solid #388bfd;
+  background: var(--na-bg, rgba(56,139,253,0.15));
+  border-left: 3px solid var(--na, #388bfd);
   padding: 1px 6px;
   border-radius: 2px;
 }
@@ -116,8 +116,8 @@ body {
 }
 .node-meta .inp-title {
   font-size: 13px; font-weight: 700; color: #e6edf3;
-  background: rgba(56,139,253,0.15);
-  border-left: 3px solid #388bfd !important;
+  background: var(--na-bg, rgba(56,139,253,0.15));
+  border-left: 3px solid var(--na, #388bfd) !important;
   padding: 1px 6px; border-radius: 2px;
 }
 .node-meta .inp-filepath {
@@ -313,25 +313,25 @@ body.link-mode .node:hover {
 
 /* ── Bubble nodes ── */
 .bubble-node {
-  background: #162116;
-  border: 2px solid #3fb950;
+  background: var(--bn-bg, #162116);
+  border: 2px solid var(--bn-border, #3fb950);
   border-radius: 14px;
   min-width: 120px; min-height: 60px;
   opacity: 0.8;
 }
 .bubble-node.selected {
-  border-color: #56d364;
-  box-shadow: 0 0 0 3px rgba(63,185,80,0.28), 0 8px 32px rgba(0,0,0,0.55);
+  border-color: var(--bn-border-sel, #56d364);
+  box-shadow: 0 0 0 3px var(--bn-glow-sel, rgba(63,185,80,0.28)), 0 8px 32px rgba(0,0,0,0.55);
 }
 .bubble-node.multi-selected {
-  border-color: #56d364;
-  box-shadow: 0 0 0 3px rgba(63,185,80,0.42), 0 8px 32px rgba(0,0,0,0.55);
+  border-color: var(--bn-border-sel, #56d364);
+  box-shadow: 0 0 0 3px var(--bn-glow-msel, rgba(63,185,80,0.42)), 0 8px 32px rgba(0,0,0,0.55);
 }
 .bubble-header {
   display: flex; align-items: center; justify-content: flex-end;
   padding: 5px 10px;
-  background: #1b2e1b;
-  border-bottom: 1px solid #2d4a2d;
+  background: var(--bh-bg, #1b2e1b);
+  border-bottom: 1px solid var(--bh-border, #2d4a2d);
   border-radius: 12px 12px 0 0;
   cursor: grab; min-height: 34px;
 }
@@ -356,6 +356,21 @@ body.link-mode .node:hover {
 /* tail SVG elements */
 .bubble-tail-poly { pointer-events: none; }
 .tail-handle { cursor: move; pointer-events: all; }
+
+/* ── Color swatches ── */
+.color-swatches {
+  display: flex; align-items: center; gap: 3px;
+  padding-right: 4px;
+}
+.color-swatch {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer; flex-shrink: 0;
+  transition: transform 0.1s, border-color 0.1s;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+}
+.color-swatch:hover { transform: scale(1.3); }
+.color-swatch.active { border-color: #fff; }
 
 /* ── Git Config Dialog ── */
 #git-dialog-overlay,
