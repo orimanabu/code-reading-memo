@@ -473,7 +473,11 @@ body.link-mode .node:hover {
   font-size: 13px; line-height: 1.65;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
-/* tail SVG elements */
+/* tail inline SVG (inside bubble div, so z-order follows bubble) */
+.bubble-tail-svg {
+  position: absolute;
+  pointer-events: none;
+}
 .bubble-tail-poly { pointer-events: none; }
 .tail-handle { cursor: move; pointer-events: all; }
 

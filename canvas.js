@@ -421,6 +421,7 @@ function renderNode(n, el) {
     renderFrameContent(n, el);
   } else if (n.type === 'bubble') {
     renderBubbleContent(n, el);
+    renderBubbleTail(n);
   } else if (S.editing === n.id) {
     el.innerHTML = editHTML(n);
     const ta = el.querySelector('textarea');
@@ -646,18 +647,27 @@ function renderBubbleContent(n, el) {
   }
 }
 
-// Draw bubble tail as smooth SVG path + draggable handle (screen coords)
+// Draw bubble tail as smooth SVG path + draggable handle (canvas coords, inline in bubble div)
 function renderBubbleTail(n) {
-  svgTails.querySelector(`[data-btail="${n.id}"]`)?.remove();
+  const el = ndEl(n.id);
+  if (!el) return;
 
-  const bl  = c2s(n.x, n.y);
-  const br  = c2s(n.x + n.w, n.y + n.h);
-  const cx  = (bl.x + br.x) / 2;
-  const cy  = (bl.y + br.y) / 2;
-  const tip = c2s(n.tailX, n.tailY);
+  // Find or create the inline SVG inside the bubble div
+  let svg = el.querySelector('.bubble-tail-svg');
+  if (!svg) {
+    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'bubble-tail-svg');
+    el.appendChild(svg);
+  }
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-  // Border radius in screen pixels (CSS: 14px, scaled by viewport)
-  const r = Math.min(14 * S.vp.scale, (br.x - bl.x) / 2, (br.y - bl.y) / 2);
+  // All coordinates in canvas pixels, relative to bubble div's top-left corner
+  const cx  = n.w / 2;
+  const cy  = n.h / 2;
+  const bl  = { x: 0,   y: 0   };
+  const br  = { x: n.w, y: n.h };
+  const tip = { x: n.tailX - n.x, y: n.tailY - n.y };
+  const r   = Math.min(14, n.w / 2, n.h / 2);
 
   // Exact intersection of center→tip ray with the rounded border + tangent there
   const hit = roundedRectRayHit(cx, cy, tip.x, tip.y, bl, br, r);
@@ -674,6 +684,18 @@ function renderBubbleTail(n) {
   const cp2 = { x: (p2.x + tip.x) / 2 + (hit.x - p2.x) * 0.25,
                  y: (p2.y + tip.y) / 2 + (hit.y - p2.y) * 0.25 };
 
+  // Size the SVG viewport to exactly cover all drawn elements (no reliance on overflow:visible)
+  const pad = 10;
+  const vbMinX = Math.min(0, n.w, tip.x, p1.x, p2.x) - pad;
+  const vbMinY = Math.min(0, n.h, tip.y, p1.y, p2.y) - pad;
+  const vbMaxX = Math.max(0, n.w, tip.x, p1.x, p2.x) + pad;
+  const vbMaxY = Math.max(0, n.h, tip.y, p1.y, p2.y) + pad;
+  svg.style.left   = vbMinX + 'px';
+  svg.style.top    = vbMinY + 'px';
+  svg.style.width  = (vbMaxX - vbMinX) + 'px';
+  svg.style.height = (vbMaxY - vbMinY) + 'px';
+  svg.setAttribute('viewBox', `${vbMinX} ${vbMinY} ${vbMaxX - vbMinX} ${vbMaxY - vbMinY}`);
+
   const fillD   = `M ${p1.x},${p1.y} Q ${cp1.x},${cp1.y} ${tip.x},${tip.y} Q ${cp2.x},${cp2.y} ${p2.x},${p2.y} Z`;
   const strokeD = `M ${p1.x},${p1.y} Q ${cp1.x},${cp1.y} ${tip.x},${tip.y} Q ${cp2.x},${cp2.y} ${p2.x},${p2.y}`;
 
@@ -681,7 +703,7 @@ function renderBubbleTail(n) {
   const _tc = NODE_COLORS.find(c => c.id === (n.color ?? 'green')) ?? NODE_COLORS.find(c => c.id === 'green');
   const stroke = isSelected ? _tc.hexLight : _tc.hex;
 
-  const g = svgE('g', { 'data-btail': n.id });
+  const g = svgE('g');
   g.appendChild(svgE('path', {
     class: 'bubble-tail-poly',
     d: fillD, fill: _tc.bgDark + 'cc', stroke: 'none',
@@ -703,7 +725,7 @@ function renderBubbleTail(n) {
   });
   g.appendChild(handle);
 
-  svgTails.appendChild(g);
+  svg.appendChild(g);
 }
 
 function addBubble(x, y) {
@@ -1074,7 +1096,6 @@ function removeNode(id) {
 
   S.nodes = S.nodes.filter(n => n.id !== id);
   S.links = S.links.filter(l => l.fromId !== id && l.toId !== id);
-  svgTails.querySelector(`[data-btail="${id}"]`)?.remove();
   const el = ndEl(id);
   if (el) el.remove();
   if (S.sel === id)     S.sel = null;
@@ -1209,7 +1230,6 @@ function targetEntryPoint(fp, tn) {
 
 function renderLinks() {
   svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
-  svgTails.querySelectorAll('[data-btail]').forEach(e => e.remove());
   for (const lnk of S.links) {
     const fn = S.nodes.find(n => n.id === lnk.fromId);
     const tn = S.nodes.find(n => n.id === lnk.toId);
@@ -1249,10 +1269,6 @@ function renderLinks() {
     g.appendChild(txt);
 
     svgLinks.appendChild(g);
-  }
-  // Bubble tails
-  for (const n of S.nodes) {
-    if (n.type === 'bubble') renderBubbleTail(n);
   }
 }
 
@@ -2171,7 +2187,6 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   S.multiSel.clear(); S.clipboard = [];
   S.gitConfig = { url: '', branch: '', tag: '', commitHash: '' };
   svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
-  svgTails.querySelectorAll('[data-btail]').forEach(e => e.remove());
   setStatus('Cleared');
 });
 

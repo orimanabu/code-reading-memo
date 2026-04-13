@@ -7871,6 +7871,287 @@ classがついたままの状態です。リンク先のブロックが消えた
 ✻ Worked for 4m 22s
 ```
 
+```
+❯ bubbleとblockを重ねると、尻尾が必ず後ろに隠れています。bubbleのテキストボックスと尻尾を同じz-orderにしてください
+
+  Searched for 4 patterns, read 2 files (ctrl+o to expand)
+
+⏺ 問題は明確です。#svg-tails がDOMで #canvas より前に配置されているため、常にノードの後ろに描画されています。#svg-tails を #canvas
+  の後ろに移動すれば、バブルの尻尾がノードと同じかそれ以上のレイヤーに表示されます。
+
+⏺ Update(canvas.html)
+  ⎿  Added 1 line, removed 1 line
+      32  </div>
+      33
+      34  <div id="wrap">
+      35 +  <div id="canvas"></div>
+      36    <svg id="svg-tails">
+      37    </svg>
+      37 -  <div id="canvas"></div>
+      38    <div id="marquee"></div>
+      39    <svg id="svg-links">
+      40      <defs>
+
+⏺ これで DOM の順序が次のようになります：
+
+  1. #canvas — すべてのノード（コードブロック・バブル本体）
+  2. #svg-tails — バブルの尻尾（ノードの上に描画）
+  3. #marquee — 選択矩形（z-index: 150 で最前面）
+  4. #svg-links — リンク矢印（最前面）
+
+  バブルの尻尾が常にノード群の上に表示されるようになります。
+
+✻ Crunched for 1m 0s
+
+❯ bubbleを作った後blockを作り、blockをbubbleの上に重ねると、bubbleのテキストボックスは後ろに隠れますが、尻尾が後ろに隠れません。直して
+
+⏺ 前回の変更を戻して、正しい解決策（尻尾をバブルノードのDOM要素の中に配置）を実装する必要があります。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 尻尾をバブルノードのdiv内にインラインSVGとして配置する方法が正しい解決策です。まず現在のコードを詳しく確認します。
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ 全体を把握しました。方針：尻尾をバブルノードdivの内部にインラインSVGとして描画し、バブル本体と同じz-orderにします。
+
+  まず canvas.html を元の順序に戻します。
+
+⏺ Update(canvas.html)
+  ⎿  Added 1 line, removed 1 line
+      32  </div>
+      33
+      34  <div id="wrap">
+      35 -  <div id="canvas"></div>
+      35    <svg id="svg-tails">
+      36    </svg>
+      37 +  <div id="canvas"></div>
+      38    <div id="marquee"></div>
+      39    <svg id="svg-links">
+      40      <defs>
+
+⏺ 次に renderBubbleTail をバブルdiv内インラインSVGに変更します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 20 lines, removed 11 lines
+      646    }
+      647  }
+      648
+      649 -// Draw bubble tail as smooth SVG path + draggable handle (screen coords)
+      649 +// Draw bubble tail as smooth SVG path + draggable handle (canvas coords, inline in bubble div)
+      650  function renderBubbleTail(n) {
+      651 -  svgTails.querySelector(`[data-btail="${n.id}"]`)?.remove();
+      651 +  const el = ndEl(n.id);
+      652 +  if (!el) return;
+      653
+      653 -  const bl  = c2s(n.x, n.y);
+      654 -  const br  = c2s(n.x + n.w, n.y + n.h);
+      655 -  const cx  = (bl.x + br.x) / 2;
+      656 -  const cy  = (bl.y + br.y) / 2;
+      657 -  const tip = c2s(n.tailX, n.tailY);
+      654 +  // Find or create the inline SVG inside the bubble div
+      655 +  let svg = el.querySelector('.bubble-tail-svg');
+      656 +  if (!svg) {
+      657 +    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      658 +    svg.setAttribute('class', 'bubble-tail-svg');
+      659 +    el.appendChild(svg);
+      660 +  }
+      661 +  while (svg.firstChild) svg.removeChild(svg.firstChild);
+      662
+      659 -  // Border radius in screen pixels (CSS: 14px, scaled by viewport)
+      660 -  const r = Math.min(14 * S.vp.scale, (br.x - bl.x) / 2, (br.y - bl.y) / 2);
+      663 +  // All coordinates in canvas pixels, relative to bubble div's top-left corner
+      664 +  const cx  = n.w / 2;
+      665 +  const cy  = n.h / 2;
+      666 +  const bl  = { x: 0,   y: 0   };
+      667 +  const br  = { x: n.w, y: n.h };
+      668 +  const tip = { x: n.tailX - n.x, y: n.tailY - n.y };
+      669 +  const r   = Math.min(14, n.w / 2, n.h / 2);
+      670
+      671    // Exact intersection of center→tip ray with the rounded border + tangent there
+      672    const hit = roundedRectRayHit(cx, cy, tip.x, tip.y, bl, br, r);
+     ...
+      690    const _tc = NODE_COLORS.find(c => c.id === (n.color ?? 'green')) ?? NODE_COLORS.find(c => c.id === 'green');
+      691    const stroke = isSelected ? _tc.hexLight : _tc.hex;
+      692
+      684 -  const g = svgE('g', { 'data-btail': n.id });
+      693 +  const g = svgE('g');
+      694    g.appendChild(svgE('path', {
+      695      class: 'bubble-tail-poly',
+      696      d: fillD, fill: _tc.bgDark + 'cc', stroke: 'none',
+     ...
+      712    });
+      713    g.appendChild(handle);
+      714
+      706 -  svgTails.appendChild(g);
+      715 +  svg.appendChild(g);
+      716  }
+      717
+      718  function addBubble(x, y) {
+
+⏺ 次に svgTails への不要な参照を削除します。
+
+⏺ Update(canvas.js)
+  ⎿  Removed 1 line
+      1083
+      1084    S.nodes = S.nodes.filter(n => n.id !== id);
+      1085    S.links = S.links.filter(l => l.fromId !== id && l.toId !== id);
+      1086 -  svgTails.querySelector(`[data-btail="${id}"]`)?.remove();
+      1086    const el = ndEl(id);
+      1087    if (el) el.remove();
+      1088    if (S.sel === id)     S.sel = null;
+
+⏺ Update(canvas.js)
+  ⎿  Removed 1 line
+      1217
+      1218  function renderLinks() {
+      1219    svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+      1220 -  svgTails.querySelectorAll('[data-btail]').forEach(e => e.remove());
+      1220    for (const lnk of S.links) {
+      1221      const fn = S.nodes.find(n => n.id === lnk.fromId);
+      1222      const tn = S.nodes.find(n => n.id === lnk.toId);
+
+⏺ Update(canvas.js)
+  ⎿  Removed 1 line
+      2178    S.multiSel.clear(); S.clipboard = [];
+      2179    S.gitConfig = { url: '', branch: '', tag: '', commitHash: '' };
+      2180    svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+      2181 -  svgTails.querySelectorAll('[data-btail]').forEach(e => e.remove());
+      2181    setStatus('Cleared');
+      2182  });
+      2183
+
+⏺ 最後にCSSで .bubble-tail-svg のスタイルを追加します。
+
+⏺ Update(canvas.css)
+  ⎿  Added 8 lines, removed 1 line
+      473    font-size: 13px; line-height: 1.65;
+      474    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      475  }
+      476 -/* tail SVG elements */
+      476 +/* tail inline SVG (inside bubble div, so z-order follows bubble) */
+      477 +.bubble-tail-svg {
+      478 +  position: absolute;
+      479 +  top: 0; left: 0;
+      480 +  width: 0; height: 0;
+      481 +  overflow: visible;
+      482 +  pointer-events: none;
+      483 +}
+      484  .bubble-tail-poly { pointer-events: none; }
+      485  .tail-handle { cursor: move; pointer-events: all; }
+      486
+
+⏺ 変更内容のまとめ：
+
+  - renderBubbleTail(): #svg-tails（別レイヤー）への描画をやめ、バブルdiv内に <svg class="bubble-tail-svg">
+  をインラインで作成して描画するよう変更。座標もスクリーン座標（c2s()）からキャンバス座標（n.tailX - n.x など）に変更。
+  - #svg-tailsの削除処理（3箇所）: インラインSVGはdiv削除時に自動的に消えるので不要なクリーンアップを削除。
+  - CSS: .bubble-tail-svg を position: absolute; overflow: visible で定義し、バブル外に尻尾が伸びても表示されるようにした。
+
+  これにより尻尾はバブルのdiv要素の一部となり、ブロックとの重なり順がバブル本体と完全に一致します。
+
+✻ Crunched for 2m 31s
+
+❯ そもそも尻尾が表示されなくなりました。直して
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ 原因がわかりました。renderNode が renderBubbleContent を呼ぶと el.innerHTML がリセットされ、追加したインラインSVGが消えます。renderBubbleContent の後に renderBubbleTail
+  を呼ぶ必要があります。
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      421      renderFrameContent(n, el);
+      422    } else if (n.type === 'bubble') {
+      423      renderBubbleContent(n, el);
+      424 +    renderBubbleTail(n);
+      425    } else if (S.editing === n.id) {
+      426      el.innerHTML = editHTML(n);
+      427      const ta = el.querySelector('textarea');
+
+⏺ また、renderLinks() 内での renderBubbleTail 呼び出しは renderNode に統合されたため、二重呼び出しになります。ただし renderBubbleTail
+  は冪等（SVGを毎回再生成）なので実害はありませんが、renderLinks() 内からは削除します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ また、インラインSVGはキャンバス座標系で描かれているので、ビューポート変換（pan/zoom）時に renderLinks() から再描画する必要もありません。削除します。
+
+⏺ Update(canvas.js)
+  ⎿  Removed 4 lines
+      1258
+      1259      svgLinks.appendChild(g);
+      1260    }
+      1261 -  // Bubble tails
+      1262 -  for (const n of S.nodes) {
+      1263 -    if (n.type === 'bubble') renderBubbleTail(n);
+      1264 -  }
+      1261  }
+      1262
+      1263  function svgE(tag, attrs = {}) {
+
+⏺ 修正内容：
+
+  - 根本原因: renderBubbleContent() が el.innerHTML を書き換えるため、後から追加したインラインSVGが消えていた
+  - 修正: renderNode() の bubble 分岐で renderBubbleContent の直後に renderBubbleTail を呼ぶようにした
+  - 整理: インラインSVGはキャンバス座標系なのでビューポート変換で自動スケールされる。renderLinks() 内の尻尾再描画ループは不要になったので削除した
+
+✻ Baked for 46s
+
+❯ まだ尻尾が表示されていません。直して
+
+  Searched for 4 patterns, read 1 file (ctrl+o to expand)
+
+⏺ デバッグのため、実際のSVG要素に何が起きているか確認します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 問題を特定しました。width: 0; height: 0 のSVGは overflow: visible
+  でも、ブラウザによって0x0のビューポート外を描画しないことがあります。SVGの位置とサイズを尻尾の範囲に合わせて動的に設定するよう変更します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 12 lines
+      684    const cp2 = { x: (p2.x + tip.x) / 2 + (hit.x - p2.x) * 0.25,
+      685                   y: (p2.y + tip.y) / 2 + (hit.y - p2.y) * 0.25 };
+      686
+      687 +  // Size the SVG viewport to exactly cover all drawn elements (no reliance on overflow:visible)
+      688 +  const pad = 10;
+      689 +  const vbMinX = Math.min(0, n.w, tip.x, p1.x, p2.x) - pad;
+      690 +  const vbMinY = Math.min(0, n.h, tip.y, p1.y, p2.y) - pad;
+      691 +  const vbMaxX = Math.max(0, n.w, tip.x, p1.x, p2.x) + pad;
+      692 +  const vbMaxY = Math.max(0, n.h, tip.y, p1.y, p2.y) + pad;
+      693 +  svg.style.left   = vbMinX + 'px';
+      694 +  svg.style.top    = vbMinY + 'px';
+      695 +  svg.style.width  = (vbMaxX - vbMinX) + 'px';
+      696 +  svg.style.height = (vbMaxY - vbMinY) + 'px';
+      697 +  svg.setAttribute('viewBox', `${vbMinX} ${vbMinY} ${vbMaxX - vbMinX} ${vbMaxY - vbMinY}`);
+      698 +
+      699    const fillD   = `M ${p1.x},${p1.y} Q ${cp1.x},${cp1.y} ${tip.x},${tip.y} Q ${cp2.x},${cp2.y} ${p2.x},${p2.y} Z`;
+      700    const strokeD = `M ${p1.x},${p1.y} Q ${cp1.x},${cp1.y} ${tip.x},${tip.y} Q ${cp2.x},${cp2.y} ${p2.x},${p2.y}`;
+      701
+
+⏺ CSSも整理します。width: 0; height: 0; overflow: visible は不要になります。
+
+⏺ Update(canvas.css)
+  ⎿  Removed 3 lines
+      476  /* tail inline SVG (inside bubble div, so z-order follows bubble) */
+      477  .bubble-tail-svg {
+      478    position: absolute;
+      479 -  top: 0; left: 0;
+      480 -  width: 0; height: 0;
+      481 -  overflow: visible;
+      479    pointer-events: none;
+      480  }
+      481  .bubble-tail-poly { pointer-events: none; }
+
+⏺ 変更のポイント：
+
+  - 根本原因: width: 0; height: 0 + overflow: visible のSVGはブラウザによってビューポート外を描画しない
+  - 修正: 尻尾のすべての座標点（バブル矩形 +
+  tipおよびp1/p2）を包含するバウンディングボックスを計算し、SVGのleft/top/width/heightとVewBoxを動的に設定。これで描画範囲が常にSVGビューポート内に収まる
+
+✻ Crunched for 4m 26s
+```
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して
