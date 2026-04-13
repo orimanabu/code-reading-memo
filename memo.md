@@ -7484,6 +7484,30 @@ classがついたままの状態です。リンク先のブロックが消えた
 ✻ Crunched for 38s
 ```
 
+```
+❯ ブロックのLine Noのチェックボックス, Editボタン、削除ボタンは右端に配置して
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+⏺ .node-actions に margin-left: auto を追加するだけで右端に寄ります：
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.css)
+  ⎿  Added 1 line
+      122    display: flex; align-items: center; gap: 4px;
+      123    opacity: 0; transition: opacity 0.15s;
+      124    flex-shrink: 0;
+      125 +  margin-left: auto;
+      126  }
+      127  .node:hover .node-actions,
+      128  .node.selected .node-actions { opacity: 1; }
+
+⏺ margin-left: auto により、.node-actions（Line No・Edit・削除ボタン）が常にヘッダーの右端に配置されます。
+
+✻ Brewed for 33s
+```
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して
