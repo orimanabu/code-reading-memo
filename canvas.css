@@ -262,15 +262,20 @@ kbd {
 /* ── Link tooltip ── */
 #link-tip {
   position: fixed; z-index: 300;
-  background: #1f6feb; color: #fff;
-  padding: 5px 13px; border-radius: 6px;
-  font-size: 12px; cursor: pointer;
+  background: #161b22; border: 1px solid #30363d;
+  border-radius: 6px; padding: 4px;
   box-shadow: 0 3px 12px rgba(0,0,0,0.45);
   display: none; white-space: nowrap;
   transform: translateX(-50%);
   pointer-events: auto;
 }
-#link-tip:hover { background: #388bfd; }
+#link-tip button {
+  display: block; width: 100%;
+  background: none; border: none; color: #e6edf3;
+  padding: 6px 14px; font-size: 12px; text-align: left;
+  border-radius: 4px; cursor: pointer; white-space: nowrap;
+}
+#link-tip button:hover { background: #1f6feb; color: #fff; }
 
 /* ── Status bar ── */
 #status {

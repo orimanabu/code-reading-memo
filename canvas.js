@@ -246,6 +246,8 @@ const wrap        = document.getElementById('wrap');
 const canvas      = document.getElementById('canvas');
 const svgLinks    = document.getElementById('svg-links');
 const linkTip        = document.getElementById('link-tip');
+const linkTipLink    = document.getElementById('link-tip-link');
+const linkTipNewBlock = document.getElementById('link-tip-newblock');
 const linkCtx        = document.getElementById('link-ctx');
 const linkCtxDel     = document.getElementById('link-ctx-del');
 const linkPreviewEl  = document.getElementById('link-preview');
@@ -1190,21 +1192,36 @@ document.addEventListener('mouseup', e => {
   const range  = sel.getRangeAt(0);
   const rect   = range.getBoundingClientRect();
 
+  const tipHeight = 80; // approximate height of two-button tip
   linkTip.style.display = 'block';
   linkTip.style.left    = (rect.left + rect.width / 2) + 'px';
-  linkTip.style.top     = Math.max(8, rect.top - 40) + 'px';
+  linkTip.style.top     = Math.max(8, rect.top - tipHeight - 8) + 'px';
 
-  linkTip.onclick = () => {
-    const anchorPos = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  const anchorPos = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+
+  linkTipLink.onclick = () => {
     sel.removeAllRanges();
     linkTip.style.display = 'none';
     enterLinkMode(fromId, text, anchorPos);
+  };
+
+  linkTipNewBlock.onclick = () => {
+    sel.removeAllRanges();
+    linkTip.style.display = 'none';
+    const fn = S.nodes.find(n => n.id === fromId);
+    const nx = fn ? fn.x + fn.w + 60 : 100;
+    const ny = s2c(anchorPos.x, anchorPos.y).y;
+    const newNode = addNode(nx, ny);
+    createLink(fromId, text, newNode.id);
+    renderLinks();
+    selectNode(newNode.id);
+    startEdit(newNode.id);
   };
 });
 
 // hide tooltip on outside click (but not when starting a text selection in code)
 document.addEventListener('mousedown', e => {
-  if (e.target === linkTip) return;
+  if (e.target.closest('#link-tip')) return;
   if (e.target.closest('.node-body')) return;
   linkTip.style.display = 'none';
 });
