@@ -245,9 +245,10 @@ const S = {
 const wrap        = document.getElementById('wrap');
 const canvas      = document.getElementById('canvas');
 const svgLinks    = document.getElementById('svg-links');
-const linkTip     = document.getElementById('link-tip');
-const linkCtx     = document.getElementById('link-ctx');
-const linkCtxDel  = document.getElementById('link-ctx-del');
+const linkTip        = document.getElementById('link-tip');
+const linkCtx        = document.getElementById('link-ctx');
+const linkCtxDel     = document.getElementById('link-ctx-del');
+const linkPreviewEl  = document.getElementById('link-preview');
 const statusEl    = document.getElementById('status');
 const marqueeEl   = document.getElementById('marquee');
 
@@ -1098,9 +1099,9 @@ function svgE(tag, attrs = {}) {
 // ═══════════════════════════════════════════════════════
 // LINK MODE
 // ═══════════════════════════════════════════════════════
-function enterLinkMode(fromId, text) {
+function enterLinkMode(fromId, text, anchorPos = null) {
   S.linkMode = true;
-  S.pending = { fromId, text };
+  S.pending = { fromId, text, anchorPos };
   document.body.classList.add('link-mode');
   setStatus(`🔗 Click the target block — "${text}" → ? (Esc to cancel)`);
 }
@@ -1110,6 +1111,7 @@ function exitLinkMode() {
   S.pending = null;
   document.body.classList.remove('link-mode');
   linkTip.style.display = 'none';
+  linkPreviewEl.style.display = 'none';
   setStatus('Ready — double-click to add block | select text to create link | right-click link to delete');
 }
 
@@ -1132,6 +1134,37 @@ function hideLinkCtx() {
 
 document.addEventListener('mousedown', e => {
   if (!e.target.closest('#link-ctx')) hideLinkCtx();
+});
+
+// ═══════════════════════════════════════════════════════
+// LINK PREVIEW (link-mode hover)
+// ═══════════════════════════════════════════════════════
+wrap.addEventListener('mousemove', e => {
+  if (!S.linkMode || !S.pending) return;
+
+  const fn = S.nodes.find(n => n.id === S.pending.fromId);
+  if (!fn) return;
+
+  // Find which node the cursor is over
+  const el = e.target.closest('.node, .bubble-node');
+  const hovId = el ? +el.id.replace('nd-', '') : null;
+  const tn = hovId !== null ? S.nodes.find(n => n.id === hovId) : null;
+
+  if (!tn || tn.id === fn.id) {
+    linkPreviewEl.style.display = 'none';
+    return;
+  }
+
+  const fp = S.pending.anchorPos ?? c2s(edgePoint(fn, tn).x, edgePoint(fn, tn).y);
+
+  const tp = targetEntryPoint(fp, tn);
+  const dx = tp.x - fp.x;
+  const dy = tp.y - fp.y;
+  const d = `M${fp.x},${fp.y} C${fp.x + dx * 0.45},${fp.y + dy * 0.1} ${tp.x - dx * 0.45},${tp.y - dy * 0.1} ${tp.x},${tp.y}`;
+
+  linkPreviewEl.setAttribute('d', d);
+  linkPreviewEl.setAttribute('marker-end', 'url(#arrow-preview)');
+  linkPreviewEl.style.display = '';
 });
 
 // ═══════════════════════════════════════════════════════
@@ -1162,9 +1195,10 @@ document.addEventListener('mouseup', e => {
   linkTip.style.top     = Math.max(8, rect.top - 40) + 'px';
 
   linkTip.onclick = () => {
+    const anchorPos = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     sel.removeAllRanges();
     linkTip.style.display = 'none';
-    enterLinkMode(fromId, text);
+    enterLinkMode(fromId, text, anchorPos);
   };
 });
 
