@@ -8152,8 +8152,203 @@ classがついたままの状態です。リンク先のブロックが消えた
 ✻ Crunched for 4m 26s
 ```
 
-# claudeを起動したときに最初に打つプロンプト
+```
+❯ block、bubble、frameのz-orderを変更できるようにしたいです。それぞれの編集モードの三点リーダーのメニューに下記4項目を追加し、各機能を実装してください
+- Bring to front
+- Bring forward
+- Send backward
+- Send to back
 
-❯ このプロジェクトが何をしているか理解して
+  Searched for 2 patterns, read 2 files (ctrl+o to expand)
 
+⏺ 全体像を把握しました。実装方針：
+  - reorderNode(id, dir) 関数でDOMとS.nodesを同期して並び替え
+  - 各ノードタイプのメニューに4項目を追加
+  - frameは現在 ••• メニューがないので追加
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ では実装します。まずCSSにセパレーターを追加します。
+
+⏺ Update(canvas.css)
+  ⎿  Added 3 lines
+      287  .edit-menu .node-btn {
+      288    text-align: left; width: 100%;
+      289  }
+      290 +.edit-menu .menu-sep {
+      291 +  height: 1px; background: #30363d; margin: 4px 0;
+      292 +}
+      293
+      294  /* ── Link context menu ── */
+      295  #link-ctx {
+
+⏺ 次にzOrderMenuHTMLヘルパーとreorderNode関数、bindZOrderButtonsヘルパーをJSに追加します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 47 lines
+      1113  }
+      1114
+      1115  // ═══════════════════════════════════════════════════════
+      1116 +// Z-ORDER
+      1117 +// ═══════════════════════════════════════════════════════
+      1118 +function zOrderMenuHTML() {
+      1119 +  return `
+      1120 +  <div class="menu-sep"></div>
+      1121 +  <button class="node-btn btn-zorder" data-dir="front">↑↑ Bring to Front</button>
+      1122 +  <button class="node-btn btn-zorder" data-dir="forward">↑ Bring Forward</button>
+      1123 +  <button class="node-btn btn-zorder" data-dir="backward">↓ Send Backward</button>
+      1124 +  <button class="node-btn btn-zorder" data-dir="back">↓↓ Send to Back</button>`;
+      1125 +}
+      1126 +
+      1127 +function bindZOrderButtons(n, el) {
+      1128 +  el.querySelectorAll('.btn-zorder').forEach(btn => {
+      1129 +    btn.addEventListener('mousedown', e => e.stopPropagation());
+      1130 +    btn.addEventListener('click', e => {
+      1131 +      e.stopPropagation();
+      1132 +      el.querySelector('.edit-menu-wrap')?.classList.remove('open');
+      1133 +      reorderNode(n.id, btn.dataset.dir);
+      1134 +    });
+      1135 +  });
+      1136 +}
+      1137 +
+      1138 +function reorderNode(id, dir) {
+      1139 +  const idx = S.nodes.findIndex(n => n.id === id);
+      1140 +  if (idx < 0) return;
+      1141 +  const el = ndEl(id);
+      1142 +  if (!el) return;
+      1143 +
+      1144 +  if (dir === 'front') {
+      1145 +    S.nodes.push(S.nodes.splice(idx, 1)[0]);
+      1146 +    canvas.appendChild(el);
+      1147 +  } else if (dir === 'back') {
+      1148 +    S.nodes.unshift(S.nodes.splice(idx, 1)[0]);
+      1149 +    canvas.insertBefore(el, canvas.firstElementChild);
+      1150 +  } else if (dir === 'forward' && idx < S.nodes.length - 1) {
+      1151 +    const tmp = S.nodes[idx]; S.nodes[idx] = S.nodes[idx + 1]; S.nodes[idx + 1] = tmp;
+      1152 +    canvas.insertBefore(ndEl(S.nodes[idx].id), el);
+      1153 +  } else if (dir === 'backward' && idx > 0) {
+      1154 +    const tmp = S.nodes[idx]; S.nodes[idx] = S.nodes[idx - 1]; S.nodes[idx - 1] = tmp;
+      1155 +    canvas.insertBefore(el, ndEl(S.nodes[idx].id));
+      1156 +  } else {
+      1157 +    return;
+      1158 +  }
+      1159 +  scheduleSave();
+      1160 +}
+      1161 +
+      1162 +// ═══════════════════════════════════════════════════════
+      1163  // COPY / CUT / PASTE
+      1164  // ═══════════════════════════════════════════════════════
+      1165  function getSelectedIds() {
+
+⏺ 次にblockのeditHTMLにz-orderメニュー項目を追加します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      892            ${colorSwatchesHTML(n.color, 'blue')}
+      893            <button class="node-btn btn-fetch-git">⬇ Fetch</button>
+      894            <button class="node-btn btn-codesnippetd">📦 codesnippetd</button>
+      895 +          ${zOrderMenuHTML()}
+      896          </div>
+      897        </div>
+      898        <button class="node-btn btn-done">✓ Done</button>
+
+⏺ blockのレンダー関数でz-orderボタンをバインドします。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      481          e.stopPropagation(); menuWrap.classList.remove('open'); openCodeSnippetdDialog(n.id);
+      482        });
+      483      }
+      484 +    bindZOrderButtons(n, el);
+      485
+      486      ta.focus();
+      487    } else {
+
+⏺ 次にbubbleのbubbleEditHTMLに追加します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      602          <button class="node-btn btn-edit-menu" title="More options">•••</button>
+      603          <div class="edit-menu">
+      604            ${colorSwatchesHTML(n.color, 'green')}
+      605 +          ${zOrderMenuHTML()}
+      606          </div>
+      607        </div>
+      608        <button class="node-btn btn-done">✓ Done</button>
+
+⏺ bubbleのレンダー関数でバインドします。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      640        menuBtn.addEventListener('mousedown', e => e.stopPropagation());
+      641        menuBtn.addEventListener('click', e => { e.stopPropagation(); menuWrap.classList.toggle('open'); });
+      642      }
+      643 +    bindZOrderButtons(n, el);
+      644      ta.focus();
+      645    } else {
+      646      el.innerHTML = bubbleViewHTML(n);
+
+⏺ 最後にframeの編集モードに ••• メニューを追加します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 14 lines, removed 1 line
+      762      <div class="frame-header">
+      763        <div class="node-actions" style="opacity:1;display:flex;align-items:center;gap:6px;">
+      764          <input class="inp-title" placeholder="Label" value="${esc(n.label ?? '')}" spellcheck="false">
+      765 -        ${colorSwatchesHTML(n.color, 'blue')}
+      765 +        <div class="edit-menu-wrap">
+      766 +          <button class="node-btn btn-edit-menu" title="More options">•••</button>
+      767 +          <div class="edit-menu">
+      768 +            ${colorSwatchesHTML(n.color, 'blue')}
+      769 +            ${zOrderMenuHTML()}
+      770 +          </div>
+      771 +        </div>
+      772          <button class="node-btn btn-done">&#x2713; Done</button>
+      773          <button class="node-btn danger btn-del">Delete</button>
+      774        </div>
+     ...
+      790          scheduleSave();
+      791        });
+      792      });
+      793 +    const menuWrap = el.querySelector('.edit-menu-wrap');
+      794 +    const menuBtn  = el.querySelector('.btn-edit-menu');
+      795 +    if (menuBtn) {
+      796 +      menuBtn.addEventListener('mousedown', e => e.stopPropagation());
+      797 +      menuBtn.addEventListener('click', e => { e.stopPropagation(); menuWrap.classList.toggle('open'); });
+      798 +    }
+      799 +    bindZOrderButtons(n, el);
+      800      inp.focus(); inp.select();
+      801    } else {
+      802      const labelHtml = n.label
+
+⏺ 実装の確認をします。
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ 全部正しく配置されています。実装内容のまとめ：
+
+  追加した機能:
+  - zOrderMenuHTML() — 4項目のメニューHTMLを生成するヘルパー
+  - bindZOrderButtons(n, el) — ボタンにイベントリスナーをバインドするヘルパー
+  - reorderNode(id, dir) — S.nodes[]配列とDOMを同期して並び替える関数
+
+  reorderNodeのロジック:
+  - front: canvas.appendChild(el) + S.nodes末尾へ移動（DOM後方 = 最前面）
+  - forward: 1つ後ろの要素と入れ替え（insertBefore(next, el) でnextをelの前に移動）
+  - backward: 1つ前の要素と入れ替え（insertBefore(el, prev) でelをprevの前に移動）
+  - back: canvas.insertBefore(el, firstChild) + S.nodes先頭へ移動
+
+  対応ノードタイプ:
+  - Block — 既存の ••• メニューに追加
+  - Bubble — 既存の ••• メニューに追加
+  - Frame — 新規に ••• メニューを追加してカラーと z-order 項目を格納
+
+✻ Worked for 3m 9s
+```
 
