@@ -6473,6 +6473,27 @@ classがついたままの状態です。リンク先のブロックが消えた
 ⏺ 以上で完了です。Bubble の編集モードでも「•••」ボタンをクリックすると色選択のドロップダウンが表示されます。
 ```
 
+```
+❯ テキスト選択時、ブロック以外の場所をクリックしても選択をクリアせて link-tipを非表示にしてください
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ 現在のハンドラは link-tip を非表示にしていますが、テキスト選択のクリアはしていません。.node-body 以外の場所をクリックしたときに選択もクリアするよう追加します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1270    if (e.target.closest('#link-tip')) return;
+      1271    if (e.target.closest('.node-body')) return;
+      1272    linkTip.style.display = 'none';
+      1273 +  window.getSelection()?.removeAllRanges();
+      1274  });
+      1275
+      1276  // ═══════════════════════════════════════════════════════
+
+⏺ 1行の追加で完了です。.node-body 以外の場所（キャンバス背景、ヘッダー、ツールバーなど）をクリックすると、テキスト選択がクリアされ link-tip も非表示になります。
+```
+
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して

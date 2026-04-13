@@ -1270,6 +1270,7 @@ document.addEventListener('mousedown', e => {
   if (e.target.closest('#link-tip')) return;
   if (e.target.closest('.node-body')) return;
   linkTip.style.display = 'none';
+  window.getSelection()?.removeAllRanges();
 });
 
 // ═══════════════════════════════════════════════════════
