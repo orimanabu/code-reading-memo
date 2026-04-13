@@ -20,6 +20,7 @@
   <span id="mode-indicator">SELECT</span>
   <button class="tb-btn" id="btn-add">+ Add Block</button>
   <button class="tb-btn" id="btn-add-bubble">💬 Bubble</button>
+  <button class="tb-btn" id="btn-group">⬜ Frame</button>
   <div class="sep"></div>
   <button class="tb-btn" id="btn-git-config">⎇ Git Config</button>
   <div class="sep"></div>
@@ -163,6 +164,25 @@
         <button class="tb-btn" id="csd-wasm-cancel">Cancel</button>
         <button class="git-btn-save" id="csd-wasm-ok" disabled>OK</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group Frame Dialog -->
+<div id="group-dialog-overlay" style="display:none;">
+  <div class="git-dialog">
+    <div class="git-dialog-title">⬜ Create Frame</div>
+    <div class="git-form-row">
+      <label class="git-form-label" for="group-label-input">Label</label>
+      <input class="git-form-input" id="group-label-input" type="text" placeholder="Group label" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="git-form-row">
+      <label class="git-form-label">Color</label>
+      <div id="group-color-swatches" class="color-swatches" style="padding:6px 0;"></div>
+    </div>
+    <div class="git-form-buttons">
+      <button class="tb-btn" id="group-cancel">Cancel</button>
+      <button class="git-btn-save" id="group-ok">Create</button>
     </div>
   </div>
 </div>

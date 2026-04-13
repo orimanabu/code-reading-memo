@@ -32,12 +32,61 @@ body {
   position: absolute;
   display: flex; flex-direction: column;
   background: #161b22;
-  border: 1px solid var(--nb, #30363d);
+  /*border: 1px solid var(--nb, #30363d);*/
+  border: 2px solid var(--nb, #30363d);
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.55);
   min-width: 260px; min-height: 120px;
   user-select: none;
   transition: border-color 0.15s, box-shadow 0.15s;
+  z-index: 1;
+}
+
+/* ── Frame nodes ── */
+.frame-node {
+  position: absolute;
+  background: var(--fn-bg, rgba(13,31,64,0.55));
+  /*border-width: 3px;*/
+  border-width: 1px;
+  border-style: solid !important;
+  border-color: var(--fn-border, rgba(56,139,253,0.38));
+  border-radius: 12px;
+  min-width: 120px; min-height: 60px;
+  user-select: none;
+  z-index: 0;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.frame-node.selected {
+  border-color: var(--fn-border-sel, #388bfd);
+  box-shadow: 0 0 0 2px var(--fn-glow, rgba(56,139,253,0.28));
+}
+.frame-node.multi-selected {
+  border-color: var(--fn-border-sel, #388bfd);
+  box-shadow: 0 0 0 2px var(--fn-glow, rgba(56,139,253,0.28));
+}
+.frame-node.dragging { opacity: 0.6; }
+
+.frame-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px;
+  background: var(--fn-header-bg, rgba(28,33,40,0.55));
+  border-bottom: 1px solid var(--fn-border, rgba(56,139,253,0.25));
+  border-radius: 10px 10px 0 0;
+  cursor: grab; min-height: 34px;
+}
+.frame-header:active { cursor: grabbing; }
+.frame-label {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.3px;
+  color: var(--fn-label, #79c0ff);
+  flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.frame-header .node-actions { opacity: 0; transition: opacity 0.15s; }
+.frame-node:hover .frame-header .node-actions,
+.frame-node.selected .frame-header .node-actions { opacity: 1; }
+.frame-header .inp-title {
+  border: none; outline: none;
+  font-size: 12px; font-weight: 600; color: var(--fn-label, #79c0ff);
+  background: transparent; width: 160px;
 }
 .node.selected {
   border-color: var(--nb-sel, #388bfd);
@@ -368,7 +417,8 @@ body.link-mode .node:hover {
 /* ── Bubble nodes ── */
 .bubble-node {
   background: var(--bn-bg, #162116);
-  border: 2px solid var(--bn-border, #3fb950);
+  /*border: 2px solid var(--bn-border, #3fb950);*/
+  border: 3px solid var(--bn-border, #3fb950);
   border-radius: 14px;
   min-width: 120px; min-height: 60px;
   opacity: 0.8;
@@ -441,7 +491,8 @@ body.link-mode .node:hover {
 #git-dialog-overlay,
 #fetch-dialog-overlay,
 #codesnippetd-dialog-overlay,
-#help-dialog-overlay {
+#help-dialog-overlay,
+#group-dialog-overlay {
   position: fixed; inset: 0; z-index: 500;
   background: rgba(0,0,0,0.65);
   display: flex; align-items: center; justify-content: center;

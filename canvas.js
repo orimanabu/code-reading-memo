@@ -353,6 +353,14 @@ function applyNodeColor(n, el) {
     el.style.setProperty('--bn-glow-msel',  c.glow42);
     el.style.setProperty('--bh-bg',         c.bgMid);
     el.style.setProperty('--bh-border',     c.borderMid);
+  } else if (n.type === 'frame') {
+    const c = NODE_COLORS.find(c => c.id === (n.color ?? 'blue')) ?? NODE_COLORS.find(c => c.id === 'blue');
+    el.style.setProperty('--fn-bg',         c.bgDark + 'cc');
+    el.style.setProperty('--fn-border',     c.hex + '55');
+    el.style.setProperty('--fn-border-sel', c.hex);
+    el.style.setProperty('--fn-glow',       c.glow28);
+    el.style.setProperty('--fn-label',      c.hexLight);
+    el.style.setProperty('--fn-header-bg',  c.bgMid + 'aa');
   } else {
     const c = NODE_COLORS.find(c => c.id === (n.color ?? 'blue')) ?? NODE_COLORS.find(c => c.id === 'blue');
     el.style.setProperty('--na',        c.hex);
@@ -408,7 +416,9 @@ function renderNode(n, el) {
   el.classList.toggle('multi-selected', S.multiSel.has(n.id));
   applyNodeColor(n, el);
 
-  if (n.type === 'bubble') {
+  if (n.type === 'frame') {
+    renderFrameContent(n, el);
+  } else if (n.type === 'bubble') {
     renderBubbleContent(n, el);
   } else if (S.editing === n.id) {
     el.innerHTML = editHTML(n);
@@ -733,6 +743,133 @@ function addBubble(x, y) {
   renderLinks();
   selectNode(n.id);
   startEdit(n.id);
+  scheduleSave();
+  return n;
+}
+
+// ═══════════════════════════════════════════════════════
+// FRAME NODE
+// ═══════════════════════════════════════════════════════
+function renderFrameContent(n, el) {
+  if (S.editing === n.id) {
+    el.innerHTML = `
+    <div class="frame-header">
+      <div class="node-actions" style="opacity:1;display:flex;align-items:center;gap:6px;">
+        <input class="inp-title" placeholder="Label" value="${esc(n.label ?? '')}" spellcheck="false">
+        ${colorSwatchesHTML(n.color, 'blue')}
+        <button class="node-btn btn-done">&#x2713; Done</button>
+        <button class="node-btn danger btn-del">Delete</button>
+      </div>
+    </div>
+    <div class="resize-handle"></div>`;
+    const inp = el.querySelector('.inp-title');
+    inp.addEventListener('input', e => { n.label = e.target.value; });
+    inp.addEventListener('mousedown', e => e.stopPropagation());
+    el.querySelector('.btn-done').addEventListener('click', e => { e.stopPropagation(); stopEdit(); });
+    el.querySelector('.btn-del').addEventListener('click', e => { e.stopPropagation(); removeNode(n.id); });
+    el.querySelectorAll('.color-swatch').forEach(sw => {
+      sw.addEventListener('mousedown', e => e.stopPropagation());
+      sw.addEventListener('click', e => {
+        e.stopPropagation();
+        n.color = sw.dataset.color;
+        applyNodeColor(n, el);
+        el.querySelectorAll('.color-swatch').forEach(s =>
+          s.classList.toggle('active', s.dataset.color === n.color));
+        scheduleSave();
+      });
+    });
+    inp.focus(); inp.select();
+  } else {
+    const labelHtml = n.label
+      ? `<span class="frame-label">${esc(n.label)}</span>`
+      : `<span class="frame-label" style="opacity:0.35">Frame</span>`;
+    el.innerHTML = `
+    <div class="frame-header">
+      ${labelHtml}
+      <div class="node-actions">
+        <button class="node-btn btn-edit">Edit</button>
+        <button class="node-btn danger btn-del">&#x2715;</button>
+      </div>
+    </div>
+    <div class="resize-handle"></div>`;
+    el.querySelector('.btn-edit').addEventListener('click', e => { e.stopPropagation(); startEdit(n.id); });
+    el.querySelector('.btn-del').addEventListener('click', e => { e.stopPropagation(); removeNode(n.id); });
+  }
+}
+
+function setupFrameEvents(n, el) {
+  el.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (e.ctrlKey || e.metaKey) return;
+    if (S.mode === 'hand' || S.spaceDown) {
+      e.preventDefault();
+      S.pan = { sx: e.clientX - S.vp.x, sy: e.clientY - S.vp.y };
+      wrap.style.cursor = 'grabbing';
+      return;
+    }
+    if (e.shiftKey) {
+      if (!e.target.closest('.node-btn') && !e.target.closest('input')) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (S.sel !== null && !S.multiSel.has(S.sel)) {
+          S.multiSel.add(S.sel);
+          ndEl(S.sel)?.classList.add('multi-selected');
+        }
+        toggleMultiSel(n.id);
+        const count = S.multiSel.size;
+        setStatus(count > 0 ? `${count} block(s) selected` : 'Ready');
+      }
+      return;
+    }
+    const onHeader = e.target.closest('.frame-header') && !e.target.closest('.node-btn') && !e.target.closest('input');
+    if (S.multiSel.size >= 1 && S.multiSel.has(n.id)) {
+      S.sel = n.id;
+      if (onHeader) {
+        e.preventDefault();
+        const allIds = new Set(S.multiSel);
+        if (S.sel !== null) allIds.add(S.sel);
+        const multiOrigins = new Map();
+        allIds.forEach(id => {
+          const mn = S.nodes.find(nn => nn.id === id);
+          if (mn) multiOrigins.set(id, { ox: mn.x, oy: mn.y, otailX: mn.tailX, otailY: mn.tailY });
+        });
+        S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, multiOrigins };
+        allIds.forEach(id => ndEl(id)?.classList.add('dragging'));
+      }
+      return;
+    }
+    clearMultiSel();
+    selectNode(n.id);
+    if (onHeader) {
+      e.preventDefault();
+      S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y };
+      el.classList.add('dragging');
+    }
+  });
+  el.addEventListener('dblclick', e => {
+    e.stopPropagation();
+    if (!e.target.closest('.node-btn') && !e.target.closest('input')) {
+      startEdit(n.id);
+    }
+  });
+}
+
+function addFrame(x, y, w, h, label, color) {
+  const n = {
+    id: S.nid++, type: 'frame',
+    x, y, w, h,
+    label: label ?? '',
+    color: color ?? 'blue',
+  };
+  S.nodes.push(n);
+  const el = document.createElement('div');
+  el.className = 'frame-node';
+  el.id = 'nd-' + n.id;
+  canvas.appendChild(el);
+  setupFrameEvents(n, el);
+  renderNode(n, el);
+  renderLinks();
+  selectNode(n.id);
   scheduleSave();
   return n;
 }
@@ -1559,6 +1696,10 @@ function saveState() {
         const { id, type, x, y, w, h, text, tailX, tailY, color } = n;
         return { id, type, x, y, w, h, text, tailX, tailY, color };
       }
+      if (n.type === 'frame') {
+        const { id, type, x, y, w, h, label, color } = n;
+        return { id, type, x, y, w, h, label, color };
+      }
       const { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color } = n;
       return { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color };
     }),
@@ -1608,6 +1749,9 @@ function loadState(data) {
       n = { id: nd.id, type: 'bubble', x: nd.x, y: nd.y, w: nd.w, h: nd.h,
             text: nd.text ?? '', tailX: nd.tailX ?? nd.x + nd.w / 2, tailY: nd.tailY ?? nd.y + nd.h + 50,
             color: nd.color ?? 'green' };
+    } else if (nd.type === 'frame') {
+      n = { id: nd.id, type: 'frame', x: nd.x, y: nd.y, w: nd.w, h: nd.h,
+            label: nd.label ?? '', color: nd.color ?? 'blue' };
     } else {
       n = { id: nd.id, x: nd.x, y: nd.y, w: nd.w, h: nd.h, code: nd.code,
             lang: nd.lang ?? 'text', title: nd.title ?? '', filePath: nd.filePath ?? '',
@@ -1616,10 +1760,15 @@ function loadState(data) {
     }
     S.nodes.push(n);
     const el = document.createElement('div');
-    el.className = 'node' + (n.type === 'bubble' ? ' bubble-node' : '');
+    el.className = n.type === 'frame' ? 'frame-node'
+                 : 'node' + (n.type === 'bubble' ? ' bubble-node' : '');
     el.id = 'nd-' + n.id;
     canvas.appendChild(el);
-    setupNodeEvents(n, el);
+    if (n.type === 'frame') {
+      setupFrameEvents(n, el);
+    } else {
+      setupNodeEvents(n, el);
+    }
     renderNode(n, el);
   }
   renderLinks();
@@ -1781,6 +1930,83 @@ function parseGitHubUrl(url) {
 });
 
 document.getElementById('btn-git-config').addEventListener('click', openDialog);
+})();
+
+// ═══════════════════════════════════════════════════════
+// GROUP FRAME DIALOG
+// ═══════════════════════════════════════════════════════
+(function () {
+  const overlay       = document.getElementById('group-dialog-overlay');
+  const labelInput    = document.getElementById('group-label-input');
+  const swatchesEl    = document.getElementById('group-color-swatches');
+  const cancelBtn     = document.getElementById('group-cancel');
+  const okBtn         = document.getElementById('group-ok');
+  if (!overlay || !okBtn) return;
+  let selectedColor   = 'blue';
+
+  function getNonFrameSelectedIds() {
+    return getSelectedIds().filter(id => {
+      const n = S.nodes.find(n => n.id === id);
+      return n && n.type !== 'frame';
+    });
+  }
+
+  function openGroupDialog() {
+    const ids = getNonFrameSelectedIds();
+    selectedColor = 'blue';
+    labelInput.value = '';
+    swatchesEl.innerHTML = NODE_COLORS.map(c =>
+      `<span class="color-swatch${c.id === selectedColor ? ' active' : ''}" data-color="${c.id}" style="background:${c.hex}" title="${c.label}"></span>`
+    ).join('');
+    swatchesEl.querySelectorAll('.color-swatch').forEach(sw => {
+      sw.addEventListener('click', () => {
+        selectedColor = sw.dataset.color;
+        swatchesEl.querySelectorAll('.color-swatch').forEach(s =>
+          s.classList.toggle('active', s.dataset.color === selectedColor));
+      });
+    });
+    overlay.style.display = 'flex';
+    labelInput.focus();
+  }
+
+  function closeDialog() { overlay.style.display = 'none'; }
+
+  okBtn.addEventListener('click', () => {
+    const ids = getNonFrameSelectedIds();
+    const PAD_H = 28, PAD_TOP = 52, PAD_BOT = 28;
+    let fx, fy, fw, fh;
+    if (ids.length < 1) {
+      // No selection: place a default-sized frame at the viewport center
+      const p = s2c(wrap.clientWidth / 2, wrap.clientHeight / 2);
+      fw = 600; fh = 400;
+      fx = p.x - fw / 2; fy = p.y - fh / 2;
+    } else {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      ids.forEach(id => {
+        const n = S.nodes.find(n => n.id === id);
+        if (!n) return;
+        minX = Math.min(minX, n.x);
+        minY = Math.min(minY, n.y);
+        maxX = Math.max(maxX, n.x + n.w);
+        maxY = Math.max(maxY, n.y + n.h);
+      });
+      fx = minX - PAD_H; fy = minY - PAD_TOP;
+      fw = (maxX - minX) + PAD_H * 2;
+      fh = (maxY - minY) + PAD_TOP + PAD_BOT;
+    }
+    addFrame(fx, fy, fw, fh, labelInput.value.trim(), selectedColor);
+    closeDialog();
+    setStatus('Frame created');
+  });
+
+  cancelBtn.addEventListener('click', closeDialog);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeDialog(); });
+  labelInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') okBtn.click();
+    if (e.key === 'Escape') closeDialog();
+  });
+
+  document.getElementById('btn-group').addEventListener('click', openGroupDialog);
 })();
 
 // ═══════════════════════════════════════════════════════

@@ -6547,6 +6547,729 @@ classがついたままの状態です。リンク先のブロックが消えた
   - キャンセルした場合は何も起きません
 ```
 
+```
+❯ toolbarに「グループ化」的なボタンを追加します。複数のコードブロックを選択して、そのボタンを押すと、選択したコードブロックを包含する大きい四角形のフレームをバックグラウンドに描い
+て、その上に選択したコードブロックが描画されるようにしたいです。バックグラウンドの四角形の色は選択できるようにしたいです
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Now let me look at the persistence (saveState/loadState) and the toolbar button handlers to understand the full picture:
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Now let me look at the CSS and the end of canvas.js to understand the rendering of nodes and z-ordering:
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Let me also check the wrap mousedown handler:
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Now I have a clear picture of the codebase. Let me implement the Frame feature:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Now I have all the context I need. Let me implement the changes:
+
+⏺ Update(canvas.html)
+  ⎿  Added 1 line
+      20    <span id="mode-indicator">SELECT</span>
+      21    <button class="tb-btn" id="btn-add">+ Add Block</button>
+      22    <button class="tb-btn" id="btn-add-bubble">💬 Bubble</button>
+      23 +  <button class="tb-btn" id="btn-group">⬜ Frame</button>
+      24    <div class="sep"></div>
+      25    <button class="tb-btn" id="btn-git-config">⎇ Git Config</button>
+      26    <div class="sep"></div>
+
+⏺ Update(canvas.html)
+  ⎿  Added 19 lines
+      168    </div>
+      169  </div>
+      170
+      171 +<!-- Group Frame Dialog -->
+      172 +<div id="group-dialog-overlay" style="display:none;">
+      173 +  <div class="git-dialog">
+      174 +    <div class="git-dialog-title">⬜ Create Frame</div>
+      175 +    <div class="git-form-row">
+      176 +      <label class="git-form-label" for="group-label-input">Label</label>
+      177 +      <input class="git-form-input" id="group-label-input" type="text" placeholder="Group label" spellcheck="false" autocomplete="off">
+      178 +    </div>
+      179 +    <div class="git-form-row">
+      180 +      <label class="git-form-label">Color</label>
+      181 +      <div id="group-color-swatches" class="color-swatches" style="padding:6px 0;"></div>
+      182 +    </div>
+      183 +    <div class="git-form-buttons">
+      184 +      <button class="tb-btn" id="group-cancel">Cancel</button>
+      185 +      <button class="git-btn-save" id="group-ok">Create</button>
+      186 +    </div>
+      187 +  </div>
+      188 +</div>
+      189 +
+      190  <!-- Help / Keyboard Shortcuts Dialog -->
+      191  <div id="help-dialog-overlay" style="display:none;">
+      192    <div class="git-dialog help-dialog">
+
+⏺ Now update the CSS:
+
+⏺ Update(canvas.css)
+  ⎿  Added 47 lines
+      38    min-width: 260px; min-height: 120px;
+      39    user-select: none;
+      40    transition: border-color 0.15s, box-shadow 0.15s;
+      41 +  z-index: 1;
+      42  }
+      43 +
+      44 +/* ── Frame nodes ── */
+      45 +.frame-node {
+      46 +  position: absolute;
+      47 +  background: var(--fn-bg, rgba(13,31,64,0.55));
+      48 +  border: 2px dashed var(--fn-border, rgba(56,139,253,0.38));
+      49 +  border-radius: 12px;
+      50 +  min-width: 120px; min-height: 60px;
+      51 +  user-select: none;
+      52 +  z-index: 0;
+      53 +  transition: border-color 0.15s, box-shadow 0.15s;
+      54 +}
+      55 +.frame-node.selected {
+      56 +  border-style: solid;
+      57 +  border-color: var(--fn-border-sel, #388bfd);
+      58 +  box-shadow: 0 0 0 2px var(--fn-glow, rgba(56,139,253,0.28));
+      59 +}
+      60 +.frame-node.multi-selected {
+      61 +  border-style: solid;
+      62 +  border-color: var(--fn-border-sel, #388bfd);
+      63 +  box-shadow: 0 0 0 2px var(--fn-glow, rgba(56,139,253,0.28));
+      64 +}
+      65 +.frame-node.dragging { opacity: 0.6; }
+      66 +
+      67 +.frame-header {
+      68 +  display: flex; align-items: center; gap: 8px;
+      69 +  padding: 5px 10px;
+      70 +  background: var(--fn-header-bg, rgba(28,33,40,0.55));
+      71 +  border-bottom: 1px solid var(--fn-border, rgba(56,139,253,0.25));
+      72 +  border-radius: 10px 10px 0 0;
+      73 +  cursor: grab; min-height: 34px;
+      74 +}
+      75 +.frame-header:active { cursor: grabbing; }
+      76 +.frame-label {
+      77 +  font-size: 12px; font-weight: 600; letter-spacing: 0.3px;
+      78 +  color: var(--fn-label, #79c0ff);
+      79 +  flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      80 +}
+      81 +.frame-header .node-actions { opacity: 0; transition: opacity 0.15s; }
+      82 +.frame-node:hover .frame-header .node-actions,
+      83 +.frame-node.selected .frame-header .node-actions { opacity: 1; }
+      84 +.frame-header .inp-title {
+      85 +  border: none; outline: none;
+      86 +  font-size: 12px; font-weight: 600; color: var(--fn-label, #79c0ff);
+      87 +  background: transparent; width: 160px;
+      88 +}
+      89  .node.selected {
+      90    border-color: var(--nb-sel, #388bfd);
+      91    box-shadow: 0 0 0 3px var(--nb-glow, rgba(56,139,253,0.22)), 0 8px 32px rgba(0,0,0,0.55);
+
+⏺ Now update applyNodeColor in canvas.js to handle frame type:
+
+⏺ Update(canvas.js)
+  ⎿  Added 8 lines
+      353      el.style.setProperty('--bn-glow-msel',  c.glow42);
+      354      el.style.setProperty('--bh-bg',         c.bgMid);
+      355      el.style.setProperty('--bh-border',     c.borderMid);
+      356 +  } else if (n.type === 'frame') {
+      357 +    const c = NODE_COLORS.find(c => c.id === (n.color ?? 'blue')) ?? NODE_COLORS.find(c => c.id === 'blue');
+      358 +    el.style.setProperty('--fn-bg',         c.bgDark + 'cc');
+      359 +    el.style.setProperty('--fn-border',     c.hex + '55');
+      360 +    el.style.setProperty('--fn-border-sel', c.hex);
+      361 +    el.style.setProperty('--fn-glow',       c.glow28);
+      362 +    el.style.setProperty('--fn-label',      c.hexLight);
+      363 +    el.style.setProperty('--fn-header-bg',  c.bgMid + 'aa');
+      364    } else {
+      365      const c = NODE_COLORS.find(c => c.id === (n.color ?? 'blue')) ?? NODE_COLORS.find(c => c.id === 'blue');
+      366      el.style.setProperty('--na',        c.hex);
+
+⏺ Now update renderNode to handle frame type:
+
+⏺ Update(canvas.js)
+  ⎿  Added 3 lines, removed 1 line
+      416    el.classList.toggle('multi-selected', S.multiSel.has(n.id));
+      417    applyNodeColor(n, el);
+      418
+      419 -  if (n.type === 'bubble') {
+      419 +  if (n.type === 'frame') {
+      420 +    renderFrameContent(n, el);
+      421 +  } else if (n.type === 'bubble') {
+      422      renderBubbleContent(n, el);
+      423    } else if (S.editing === n.id) {
+      424      el.innerHTML = editHTML(n);
+
+⏺ Now add the frame functions after addBubble. Let me find the exact spot:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 127 lines
+      747    return n;
+      748  }
+      749
+      750 +// ═══════════════════════════════════════════════════════
+      751 +// FRAME NODE
+      752 +// ═══════════════════════════════════════════════════════
+      753 +function renderFrameContent(n, el) {
+      754 +  if (S.editing === n.id) {
+      755 +    el.innerHTML = `
+      756 +    <div class="frame-header">
+      757 +      <div class="node-actions" style="opacity:1;display:flex;align-items:center;gap:6px;">
+      758 +        <input class="inp-title" placeholder="Label" value="${esc(n.label ?? '')}" spellcheck="false">
+      759 +        ${colorSwatchesHTML(n.color, 'blue')}
+      760 +        <button class="node-btn btn-done">&#x2713; Done</button>
+      761 +        <button class="node-btn danger btn-del">Delete</button>
+      762 +      </div>
+      763 +    </div>
+      764 +    <div class="resize-handle"></div>`;
+      765 +    const inp = el.querySelector('.inp-title');
+      766 +    inp.addEventListener('input', e => { n.label = e.target.value; });
+      767 +    inp.addEventListener('mousedown', e => e.stopPropagation());
+      768 +    el.querySelector('.btn-done').addEventListener('click', e => { e.stopPropagation(); stopEdit(); });
+      769 +    el.querySelector('.btn-del').addEventListener('click', e => { e.stopPropagation(); removeNode(n.id); });
+      770 +    el.querySelectorAll('.color-swatch').forEach(sw => {
+      771 +      sw.addEventListener('mousedown', e => e.stopPropagation());
+      772 +      sw.addEventListener('click', e => {
+      773 +        e.stopPropagation();
+      774 +        n.color = sw.dataset.color;
+      775 +        applyNodeColor(n, el);
+      776 +        el.querySelectorAll('.color-swatch').forEach(s =>
+      777 +          s.classList.toggle('active', s.dataset.color === n.color));
+      778 +        scheduleSave();
+      779 +      });
+      780 +    });
+      781 +    inp.focus(); inp.select();
+      782 +  } else {
+      783 +    const labelHtml = n.label
+      784 +      ? `<span class="frame-label">${esc(n.label)}</span>`
+      785 +      : `<span class="frame-label" style="opacity:0.35">Frame</span>`;
+      786 +    el.innerHTML = `
+      787 +    <div class="frame-header">
+      788 +      ${labelHtml}
+      789 +      <div class="node-actions">
+      790 +        <button class="node-btn btn-edit">Edit</button>
+      791 +        <button class="node-btn danger btn-del">&#x2715;</button>
+      792 +      </div>
+      793 +    </div>
+      794 +    <div class="resize-handle"></div>`;
+      795 +    el.querySelector('.btn-edit').addEventListener('click', e => { e.stopPropagation(); startEdit(n.id); });
+      796 +    el.querySelector('.btn-del').addEventListener('click', e => { e.stopPropagation(); removeNode(n.id); });
+      797 +  }
+      798 +}
+      799 +
+      800 +function setupFrameEvents(n, el) {
+      801 +  el.addEventListener('mousedown', e => {
+      802 +    if (e.button !== 0) return;
+      803 +    if (e.ctrlKey || e.metaKey) return;
+      804 +    if (S.mode === 'hand' || S.spaceDown) {
+      805 +      e.preventDefault();
+      806 +      S.pan = { sx: e.clientX - S.vp.x, sy: e.clientY - S.vp.y };
+      807 +      wrap.style.cursor = 'grabbing';
+      808 +      return;
+      809 +    }
+      810 +    if (e.shiftKey) {
+      811 +      if (!e.target.closest('.node-btn') && !e.target.closest('input')) {
+      812 +        e.preventDefault();
+      813 +        e.stopPropagation();
+      814 +        if (S.sel !== null && !S.multiSel.has(S.sel)) {
+      815 +          S.multiSel.add(S.sel);
+      816 +          ndEl(S.sel)?.classList.add('multi-selected');
+      817 +        }
+      818 +        toggleMultiSel(n.id);
+      819 +        const count = S.multiSel.size;
+      820 +        setStatus(count > 0 ? `${count} block(s) selected` : 'Ready');
+      821 +      }
+      822 +      return;
+      823 +    }
+      824 +    const onHeader = e.target.closest('.frame-header') && !e.target.closest('.node-btn') && !e.target.closest('input');
+      825 +    if (S.multiSel.size >= 1 && S.multiSel.has(n.id)) {
+      826 +      S.sel = n.id;
+      827 +      if (onHeader) {
+      828 +        e.preventDefault();
+      829 +        const allIds = new Set(S.multiSel);
+      830 +        if (S.sel !== null) allIds.add(S.sel);
+      831 +        const multiOrigins = new Map();
+      832 +        allIds.forEach(id => {
+      833 +          const mn = S.nodes.find(nn => nn.id === id);
+      834 +          if (mn) multiOrigins.set(id, { ox: mn.x, oy: mn.y, otailX: mn.tailX, otailY: mn.tailY });
+      835 +        });
+      836 +        S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, multiOrigins };
+      837 +        allIds.forEach(id => ndEl(id)?.classList.add('dragging'));
+      838 +      }
+      839 +      return;
+      840 +    }
+      841 +    clearMultiSel();
+      842 +    selectNode(n.id);
+      843 +    if (onHeader) {
+      844 +      e.preventDefault();
+      845 +      S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y };
+      846 +      el.classList.add('dragging');
+      847 +    }
+      848 +  });
+      849 +  el.addEventListener('dblclick', e => {
+      850 +    e.stopPropagation();
+      851 +    if (!e.target.closest('.node-btn') && !e.target.closest('input')) {
+      852 +      startEdit(n.id);
+      853 +    }
+      854 +  });
+      855 +}
+      856 +
+      857 +function addFrame(x, y, w, h, label, color) {
+      858 +  const n = {
+      859 +    id: S.nid++, type: 'frame',
+      860 +    x, y, w, h,
+      861 +    label: label ?? '',
+      862 +    color: color ?? 'blue',
+      863 +  };
+      864 +  S.nodes.push(n);
+      865 +  const el = document.createElement('div');
+      866 +  el.className = 'frame-node';
+      867 +  el.id = 'nd-' + n.id;
+      868 +  canvas.appendChild(el);
+      869 +  setupFrameEvents(n, el);
+      870 +  renderNode(n, el);
+      871 +  renderLinks();
+      872 +  selectNode(n.id);
+      873 +  scheduleSave();
+      874 +  return n;
+      875 +}
+      876 +
+      877  function editHTML(n) {
+      878    return `
+      879    <div class="node-header">
+
+⏺ Now update saveState to handle frame nodes:
+
+⏺ Update(canvas.js)
+  ⎿  Added 4 lines
+      1696          const { id, type, x, y, w, h, text, tailX, tailY, color } = n;
+      1697          return { id, type, x, y, w, h, text, tailX, tailY, color };
+      1698        }
+      1699 +      if (n.type === 'frame') {
+      1700 +        const { id, type, x, y, w, h, label, color } = n;
+      1701 +        return { id, type, x, y, w, h, label, color };
+      1702 +      }
+      1703        const { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color } = n;
+      1704        return { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color };
+      1705      }),
+
+⏺ Now update loadState to handle frame nodes:
+
+⏺ Update(canvas.js)
+  ⎿  Added 10 lines, removed 2 lines
+      1749        n = { id: nd.id, type: 'bubble', x: nd.x, y: nd.y, w: nd.w, h: nd.h,
+      1750              text: nd.text ?? '', tailX: nd.tailX ?? nd.x + nd.w / 2, tailY: nd.tailY ?? nd.y + nd.h + 50,
+      1751              color: nd.color ?? 'green' };
+      1752 +    } else if (nd.type === 'frame') {
+      1753 +      n = { id: nd.id, type: 'frame', x: nd.x, y: nd.y, w: nd.w, h: nd.h,
+      1754 +            label: nd.label ?? '', color: nd.color ?? 'blue' };
+      1755      } else {
+      1756        n = { id: nd.id, x: nd.x, y: nd.y, w: nd.w, h: nd.h, code: nd.code,
+      1757              lang: nd.lang ?? 'text', title: nd.title ?? '', filePath: nd.filePath ?? '',
+     ...
+      1760      }
+      1761      S.nodes.push(n);
+      1762      const el = document.createElement('div');
+      1760 -    el.className = 'node' + (n.type === 'bubble' ? ' bubble-node' : '');
+      1763 +    el.className = n.type === 'frame' ? 'frame-node'
+      1764 +                 : 'node' + (n.type === 'bubble' ? ' bubble-node' : '');
+      1765      el.id = 'nd-' + n.id;
+      1766      canvas.appendChild(el);
+      1763 -    setupNodeEvents(n, el);
+      1767 +    if (n.type === 'frame') {
+      1768 +      setupFrameEvents(n, el);
+      1769 +    } else {
+      1770 +      setupNodeEvents(n, el);
+      1771 +    }
+      1772      renderNode(n, el);
+      1773    }
+      1774    renderLinks();
+
+⏺ Now exclude frame nodes from marquee selection and add the group dialog handler. First let me find the marquee selection:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1570        clearMultiSel();
+      1571        selectNode(null);
+      1572        S.nodes.forEach(n => {
+      1573 +        if (n.type === 'frame') return; // frames are excluded from marquee selection
+      1574          // Axis-aligned rect overlap: node rect vs marquee rect
+      1575          if (n.x < c1.x && n.x + n.w > c0.x && n.y < c1.y && n.y + n.h > c0.y) {
+      1576            S.multiSel.add(n.id);
+
+⏺ Now add the group dialog handler. Let me find where to insert it (near the btn-add-bubble handler):
+
+⏺ Reading 1 file… (ctrl+o to expand)
+  ⎿  canvas.js
+
+⏺ Update(canvas.js)
+  ⎿  Added 76 lines
+      1934  })();
+      1935
+      1936  // ═══════════════════════════════════════════════════════
+      1937 +// GROUP FRAME DIALOG
+      1938 +// ═══════════════════════════════════════════════════════
+      1939 +(function () {
+      1940 +  const overlay       = document.getElementById('group-dialog-overlay');
+      1941 +  const labelInput    = document.getElementById('group-label-input');
+      1942 +  const swatchesEl    = document.getElementById('group-color-swatches');
+      1943 +  const cancelBtn     = document.getElementById('group-cancel');
+      1944 +  const okBtn         = document.getElementById('group-ok');
+      1945 +  let selectedColor   = 'blue';
+      1946 +
+      1947 +  function getNonFrameSelectedIds() {
+      1948 +    return getSelectedIds().filter(id => {
+      1949 +      const n = S.nodes.find(n => n.id === id);
+      1950 +      return n && n.type !== 'frame';
+      1951 +    });
+      1952 +  }
+      1953 +
+      1954 +  function openGroupDialog() {
+      1955 +    const ids = getNonFrameSelectedIds();
+      1956 +    if (ids.length < 1) {
+      1957 +      setStatus('Select at least one block to create a frame');
+      1958 +      return;
+      1959 +    }
+      1960 +    selectedColor = 'blue';
+      1961 +    labelInput.value = '';
+      1962 +    swatchesEl.innerHTML = NODE_COLORS.map(c =>
+      1963 +      `<span class="color-swatch${c.id === selectedColor ? ' active' : ''}" data-color="${c.id}" style="background:${c.hex}" title="${c.label}"></span>`
+      1964 +    ).join('');
+      1965 +    swatchesEl.querySelectorAll('.color-swatch').forEach(sw => {
+      1966 +      sw.addEventListener('click', () => {
+      1967 +        selectedColor = sw.dataset.color;
+      1968 +        swatchesEl.querySelectorAll('.color-swatch').forEach(s =>
+      1969 +          s.classList.toggle('active', s.dataset.color === selectedColor));
+      1970 +      });
+      1971 +    });
+      1972 +    overlay.style.display = 'flex';
+      1973 +    labelInput.focus();
+      1974 +  }
+      1975 +
+      1976 +  function closeDialog() { overlay.style.display = 'none'; }
+      1977 +
+      1978 +  okBtn.addEventListener('click', () => {
+      1979 +    const ids = getNonFrameSelectedIds();
+      1980 +    if (ids.length < 1) { closeDialog(); return; }
+      1981 +    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      1982 +    ids.forEach(id => {
+      1983 +      const n = S.nodes.find(n => n.id === id);
+      1984 +      if (!n) return;
+      1985 +      minX = Math.min(minX, n.x);
+      1986 +      minY = Math.min(minY, n.y);
+      1987 +      maxX = Math.max(maxX, n.x + n.w);
+      1988 +      maxY = Math.max(maxY, n.y + n.h);
+      1989 +    });
+      1990 +    const PAD_H = 28, PAD_TOP = 52, PAD_BOT = 28;
+      1991 +    addFrame(
+      1992 +      minX - PAD_H, minY - PAD_TOP,
+      1993 +      (maxX - minX) + PAD_H * 2,
+      1994 +      (maxY - minY) + PAD_TOP + PAD_BOT,
+      1995 +      labelInput.value.trim(),
+      1996 +      selectedColor
+      1997 +    );
+      1998 +    closeDialog();
+      1999 +    setStatus('Frame created');
+      2000 +  });
+      2001 +
+      2002 +  cancelBtn.addEventListener('click', closeDialog);
+      2003 +  overlay.addEventListener('click', e => { if (e.target === overlay) closeDialog(); });
+      2004 +  labelInput.addEventListener('keydown', e => {
+      2005 +    if (e.key === 'Enter') okBtn.click();
+      2006 +    if (e.key === 'Escape') closeDialog();
+      2007 +  });
+      2008 +
+      2009 +  document.getElementById('btn-group').addEventListener('click', openGroupDialog);
+      2010 +})();
+      2011 +
+      2012 +// ═══════════════════════════════════════════════════════
+      2013  // GIT SNIPPET FETCH DIALOG
+      2014  // ═══════════════════════════════════════════════════════
+      2015  (function () {
+
+⏺ Now let me verify all the changes look correct by checking key sections:
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ Good. Let me also check the saveState frame case:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Let me also verify the renderFrameContent and setupFrameEvents were added correctly:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Everything looks good. Now let me run the tests to make sure nothing is broken:
+
+⏺ Bash(npm test 2>&1 | tail -30)
+  ⎿      1980|     if (ids.length < 1) { closeDialog(); return; }
+      ❯ canvas.js:2010:3
+      ❯ tests/canvas-dom.test.js:2:31
+     … +27 lines (ctrl+o to expand)
+
+⏺ The tests fail because the JSDOM environment doesn't have the dialog elements. Let me check the test setup:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ The IIFE needs a null-guard for the test environment. Fix it:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1942    const swatchesEl    = document.getElementById('group-color-swatches');
+      1943    const cancelBtn     = document.getElementById('group-cancel');
+      1944    const okBtn         = document.getElementById('group-ok');
+      1945 +  if (!overlay || !okBtn) return;
+      1946    let selectedColor   = 'blue';
+      1947
+      1948    function getNonFrameSelectedIds() {
+
+⏺ Bash(npm test 2>&1 | tail -20)
+  ⎿   FAIL  tests/canvas-integration.test.js [ tests/canvas-integration.test.js ]
+     TypeError: Cannot read properties of null (reading 'addEventListener')
+      ❯ canvas.js:2261:13
+     … +15 lines (ctrl+o to expand)
+
+⏺ This error is in a different IIFE (codesnippetd dialog at line 2261) - let me check if this was pre-existing:
+
+⏺ Bash(git stash && npm test 2>&1 | tail -10)
+  ⎿  Saved working directory and index state WIP on frame: 03a67a0 Use showSaveFilePicker API for data export
+      ❯ canvas.js:2284:3
+      ❯ tests/canvas-integration.test.js:2:31
+     … +7 lines (ctrl+o to expand)
+
+⏺ Pre-existing failure. Let me restore my changes:
+
+⏺ Bash(git stash pop)
+  ⎿  On branch frame
+     Changes not staged for commit:
+       (use "git add <file>..." to update what will be committed)
+     … +7 lines (ctrl+o to expand)
+
+⏺ Tests were already failing before my changes. The implementation is complete. Let me do a quick sanity check on the key parts:
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ Everything looks correct. Here's what was implemented:
+
+  Toolbar: Added ⬜ Frame button next to the Bubble button.
+
+  When clicked with nodes selected:
+  1. A dialog opens with a label input and color swatches (all 8 existing colors)
+  2. On "Create": calculates the bounding box of selected nodes, adds padding (28px sides, 52px top for the header, 28px bottom), and creates a frame node behind them
+
+  Frame node behavior:
+  - Rendered as a semi-transparent colored rectangle with a dashed border (solid when selected)
+  - Has a draggable header bar showing the label
+  - Edit mode (double-click or Edit button): shows label input + color swatches inline in the header
+  - z-index: 0 — always behind regular nodes (z-index: 1)
+  - Draggable by the header, resizable via the resize handle
+  - Excluded from marquee selection (shift-click to select a frame)
+  - Serialized/deserialized in localStorage and JSON export/import
+  - Works with all 8 existing color themes
+
+✻ Cooked for 8m 27s
+
+❯ フレーム作成のパネルはmordal dialogにしてください
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+⏺ #group-dialog-overlay はCSSのリストに含まれていないので、オーバーレイのモーダルスタイルが適用されていません。追加するだけです。
+
+⏺ Update(canvas.css)
+  ⎿  Added 2 lines, removed 1 line
+      488  #git-dialog-overlay,
+      489  #fetch-dialog-overlay,
+      490  #codesnippetd-dialog-overlay,
+      491 -#help-dialog-overlay {
+      491 +#help-dialog-overlay,
+      492 +#group-dialog-overlay {
+      493    position: fixed; inset: 0; z-index: 500;
+      494    background: rgba(0,0,0,0.65);
+      495    display: flex; align-items: center; justify-content: center;
+
+⏺ これで #group-dialog-overlay が他のダイアログと同様に、position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.65) のモーダルオーバーレイとして表示されます。
+
+❯ フレームの枠線を実践にし、少し太くしてください
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.css)
+  ⎿  Added 1 line, removed 1 line
+      45  .frame-node {
+      46    position: absolute;
+      47    background: var(--fn-bg, rgba(13,31,64,0.55));
+      48 -  border: 2px dashed var(--fn-border, rgba(56,139,253,0.38));
+      48 +  border: 3px solid var(--fn-border, rgba(56,139,253,0.38));
+      49    border-radius: 12px;
+      50    min-width: 120px; min-height: 60px;
+      51    user-select: none;
+
+⏺ Also remove the border-style: solid overrides in the selected/multi-selected states since the base is now already solid:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.css)
+  ⎿  Removed 2 lines
+      53    transition: border-color 0.15s, box-shadow 0.15s;
+      54  }
+      55  .frame-node.selected {
+      56 -  border-style: solid;
+      56    border-color: var(--fn-border-sel, #388bfd);
+      57    box-shadow: 0 0 0 2px var(--fn-glow, rgba(56,139,253,0.28));
+      58  }
+      59  .frame-node.multi-selected {
+      61 -  border-style: solid;
+      60    border-color: var(--fn-border-sel, #388bfd);
+      61    box-shadow: 0 0 0 2px var(--fn-glow, rgba(56,139,253,0.28));
+      62  }
+
+⏺ 枠線を dashed から solid に変更し、2px → 3px に太くしました。
+
+❯ フレームが選択/クリックされていないとき、枠線がまだ点線です。実線にしてください
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ CSSでは solid に変更済みです。JSで border のインラインスタイルが上書きしていないか確認します。
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ CSSは正しく solid になっています。ブラウザのキャッシュの可能性がありますが、念のため transition プロパティにも border-style が含まれないよう確認し、border-style
+  を明示的に指定します：
+
+⏺ Update(canvas.css)
+  ⎿  Added 3 lines, removed 1 line
+      45  .frame-node {
+      46    position: absolute;
+      47    background: var(--fn-bg, rgba(13,31,64,0.55));
+      48 -  border: 3px solid var(--fn-border, rgba(56,139,253,0.38));
+      48 +  border-width: 3px;
+      49 +  border-style: solid !important;
+      50 +  border-color: var(--fn-border, rgba(56,139,253,0.38));
+      51    border-radius: 12px;
+      52    min-width: 120px; min-height: 60px;
+      53    user-select: none;
+
+⏺ border-style: solid !important で他のスタイルによる上書きを防ぎます。ハードリフレッシュ（Cmd+Shift+R）もお試しください。
+
+✻ Sautéed for 42s
+
+❯ マウスドラッグによる複数選択において、フレームも選択できるようにしてください
+
+⏺ Update(canvas.js)
+  ⎿  File must be read first
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Removed 1 line
+      1570        clearMultiSel();
+      1571        selectNode(null);
+      1572        S.nodes.forEach(n => {
+      1573 -        if (n.type === 'frame') return; // frames are excluded from marquee selection
+      1573          // Axis-aligned rect overlap: node rect vs marquee rect
+      1574          if (n.x < c1.x && n.x + n.w > c0.x && n.y < c1.y && n.y + n.h > c0.y) {
+      1575            S.multiSel.add(n.id);
+
+⏺ マーキー選択からフレームを除外していた1行を削除しました。これでドラッグによる範囲選択でフレームも選択されます。
+
+❯ フレームとブロックとバブルに関して、枠線の太さを設定している箇所を教えて
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ バブルの枠線はSVGで描画されているのでCSSとJSの両方を確認します。
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ まとめると：
+
+  ┌────────────────────────┬──────────────────────────────────────────┬──────┐
+  │          要素          │                   場所                   │ 太さ │
+  ├────────────────────────┼──────────────────────────────────────────┼──────┤
+  │ ブロック (.node)       │ canvas.css 35行目 border: 1px solid ...  │ 1px  │
+  ├────────────────────────┼──────────────────────────────────────────┼──────┤
+  │ フレーム (.frame-node) │ canvas.css 48行目 border-width: 3px      │ 3px  │
+  ├────────────────────────┼──────────────────────────────────────────┼──────┤
+  │ バブル (.bubble-node)  │ canvas.css 418行目 border: 2px solid ... │ 2px  │
+  └────────────────────────┴──────────────────────────────────────────┴──────┘
+
+❯ 何も選択していないときにFrameボタンを押した場合は、適当な大きさのフレームを作成するようにしてください
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Removed 4 lines
+      1953
+      1954    function openGroupDialog() {
+      1955      const ids = getNonFrameSelectedIds();
+      1956 -    if (ids.length < 1) {
+      1957 -      setStatus('Select at least one block to create a frame');
+      1958 -      return;
+      1959 -    }
+      1956      selectedColor = 'blue';
+      1957      labelInput.value = '';
+      1958      swatchesEl.innerHTML = NODE_COLORS.map(c =>
+
+⏺ 次に、Create ボタン側でも「選択なし」のときにビューポート中央に固定サイズのフレームを置くよう変更します：
+
+⏺ Update(canvas.js)
+  ⎿  Added 21 lines, removed 17 lines
+      1973
+      1974    okBtn.addEventListener('click', () => {
+      1975      const ids = getNonFrameSelectedIds();
+      1976 -    if (ids.length < 1) { closeDialog(); return; }
+      1977 -    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      1978 -    ids.forEach(id => {
+      1979 -      const n = S.nodes.find(n => n.id === id);
+      1980 -      if (!n) return;
+      1981 -      minX = Math.min(minX, n.x);
+      1982 -      minY = Math.min(minY, n.y);
+      1983 -      maxX = Math.max(maxX, n.x + n.w);
+      1984 -      maxY = Math.max(maxY, n.y + n.h);
+      1985 -    });
+      1976      const PAD_H = 28, PAD_TOP = 52, PAD_BOT = 28;
+      1987 -    addFrame(
+      1988 -      minX - PAD_H, minY - PAD_TOP,
+      1989 -      (maxX - minX) + PAD_H * 2,
+      1990 -      (maxY - minY) + PAD_TOP + PAD_BOT,
+      1991 -      labelInput.value.trim(),
+      1992 -      selectedColor
+      1993 -    );
+      1977 +    let fx, fy, fw, fh;
+      1978 +    if (ids.length < 1) {
+      1979 +      // No selection: place a default-sized frame at the viewport center
+      1980 +      const p = s2c(wrap.clientWidth / 2, wrap.clientHeight / 2);
+      1981 +      fw = 600; fh = 400;
+      1982 +      fx = p.x - fw / 2; fy = p.y - fh / 2;
+      1983 +    } else {
+      1984 +      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      1985 +      ids.forEach(id => {
+      1986 +        const n = S.nodes.find(n => n.id === id);
+      1987 +        if (!n) return;
+      1988 +        minX = Math.min(minX, n.x);
+      1989 +        minY = Math.min(minY, n.y);
+      1990 +        maxX = Math.max(maxX, n.x + n.w);
+      1991 +        maxY = Math.max(maxY, n.y + n.h);
+      1992 +      });
+      1993 +      fx = minX - PAD_H; fy = minY - PAD_TOP;
+      1994 +      fw = (maxX - minX) + PAD_H * 2;
+      1995 +      fh = (maxY - minY) + PAD_TOP + PAD_BOT;
+      1996 +    }
+      1997 +    addFrame(fx, fy, fw, fh, labelInput.value.trim(), selectedColor);
+      1998      closeDialog();
+      1999      setStatus('Frame created');
+      2000    });
+
+⏺ これで：
+  - ブロック/バブルを選択した状態でFrameボタン → 選択範囲を囲むフレームを作成
+  - 何も選択していない状態でFrameボタン → ビューポート中央に 600×400 のフレームを作成
+```
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して
