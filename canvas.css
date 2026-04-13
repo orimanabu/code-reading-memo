@@ -199,6 +199,27 @@ body {
   pointer-events: none;
 }
 
+/* ── Edit menu (⚙ dropdown in edit mode) ── */
+.edit-menu-wrap {
+  position: relative;
+}
+.edit-menu {
+  display: none;
+  position: absolute; top: calc(100% + 4px); right: 0;
+  z-index: 400;
+  background: #161b22; border: 1px solid #30363d;
+  border-radius: 6px; padding: 8px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+  min-width: 160px;
+  white-space: nowrap;
+}
+.btn-edit-menu { font-size: 14px; padding: 2px 7px; letter-spacing: 1px; }
+.edit-menu-wrap.open .edit-menu { display: flex; flex-direction: column; gap: 4px; }
+.edit-menu .color-swatches { margin-bottom: 4px; }
+.edit-menu .node-btn {
+  text-align: left; width: 100%;
+}
+
 /* ── Link context menu ── */
 #link-ctx {
   position: fixed; z-index: 310;

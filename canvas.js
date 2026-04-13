@@ -441,6 +441,32 @@ function renderNode(n, el) {
         scheduleSave();
       });
     });
+
+    // Edit menu toggle (⚙)
+    const menuWrap = el.querySelector('.edit-menu-wrap');
+    const menuBtn  = el.querySelector('.btn-edit-menu');
+    if (menuBtn) {
+      menuBtn.addEventListener('mousedown', e => e.stopPropagation());
+      menuBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        menuWrap.classList.toggle('open');
+      });
+    }
+    const btnFetchEdit = el.querySelector('.btn-fetch-git');
+    if (btnFetchEdit) {
+      btnFetchEdit.addEventListener('mousedown', e => e.stopPropagation());
+      btnFetchEdit.addEventListener('click', e => {
+        e.stopPropagation(); menuWrap.classList.remove('open'); openFetchDialog(n.id);
+      });
+    }
+    const btnCsdEdit = el.querySelector('.btn-codesnippetd');
+    if (btnCsdEdit) {
+      btnCsdEdit.addEventListener('mousedown', e => e.stopPropagation());
+      btnCsdEdit.addEventListener('click', e => {
+        e.stopPropagation(); menuWrap.classList.remove('open'); openCodeSnippetdDialog(n.id);
+      });
+    }
+
     ta.focus();
   } else {
     const { html, lang } = buildCodeHTML(n.code, n.id);
@@ -466,19 +492,6 @@ function renderNode(n, el) {
     });
 
     // Git snippet fetch button
-    const btnFetch = el.querySelector('.btn-fetch-git');
-    if (btnFetch) {
-      btnFetch.addEventListener('mousedown', e => e.stopPropagation());
-      btnFetch.addEventListener('click', e => { e.stopPropagation(); openFetchDialog(n.id); });
-    }
-
-    // Codesnippetd button
-    const btnCsd = el.querySelector('.btn-codesnippetd');
-    if (btnCsd) {
-      btnCsd.addEventListener('mousedown', e => e.stopPropagation());
-      btnCsd.addEventListener('click', e => { e.stopPropagation(); openCodeSnippetdDialog(n.id); });
-    }
-
     // Inline edit for title / filePath
     el.querySelectorAll('.editable-meta').forEach(span => {
       span.addEventListener('mousedown', e => e.stopPropagation());
@@ -716,8 +729,15 @@ function editHTML(n) {
       <input class="inp-filepath" placeholder="File path (e.g. src/utils/helper.ts)" value="${esc(n.filePath ?? '')}" spellcheck="false">
     </div>
     <div class="node-actions" style="opacity:1">
-      ${colorSwatchesHTML(n.color, 'blue')}
       <span class="lang-badge">${esc(n.lang)}</span>
+      <div class="edit-menu-wrap">
+        <button class="node-btn btn-edit-menu" title="More options">•••</button>
+        <div class="edit-menu">
+          ${colorSwatchesHTML(n.color, 'blue')}
+          <button class="node-btn btn-fetch-git">⬇ Fetch</button>
+          <button class="node-btn btn-codesnippetd">📦 codesnippetd</button>
+        </div>
+      </div>
       <button class="node-btn btn-done">✓ Done</button>
       <button class="node-btn danger btn-del">Delete</button>
     </div>
@@ -739,8 +759,6 @@ function viewHTML(n, codeHtml) {
   <div class="node-header">
     ${metaHtml}
     <div class="node-actions">
-      <button class="node-btn btn-fetch-git">⬇ Fetch</button>
-      <button class="node-btn btn-codesnippetd">📦 codesnippetd</button>
       <label class="ln-toggle" title="Show/hide line numbers"><input type="checkbox" class="ln-cb"${n.showLineNumbers ? ' checked' : ''}> Line Nos</label>
       <button class="node-btn btn-edit">Edit</button>
       <button class="node-btn danger btn-del">✕</button>
