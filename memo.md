@@ -6434,6 +6434,45 @@ classがついたままの状態です。リンク先のブロックが消えた
 ✻ Worked for 56s
 ```
 
+```
+❯ Bubbleの編集モードについても、色選択を三点リーダーボタンに入れてください
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ bubbleEditHTML とそのイベントハンドラを修正します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 12 lines, removed 1 line
+      605    return `
+      606    <div class="bubble-header">
+      607      <div class="node-actions" style="opacity:1">
+      608 -      ${colorSwatchesHTML(n.color, 'green')}
+      608 +      <div class="edit-menu-wrap">
+      609 +        <button class="node-btn btn-edit-menu" title="More options">•••</button>
+      610 +        <div class="edit-menu">
+      611 +          ${colorSwatchesHTML(n.color, 'green')}
+      612 +        </div>
+      613 +      </div>
+      614        <button class="node-btn btn-done">✓ Done</button>
+      615        <button class="node-btn danger btn-del">Delete</button>
+      616      </div>
+     ...
+      640          scheduleSave();
+      641        });
+      642      });
+      643 +    const menuWrap = el.querySelector('.edit-menu-wrap');
+      644 +    const menuBtn  = el.querySelector('.btn-edit-menu');
+      645 +    if (menuBtn) {
+      646 +      menuBtn.addEventListener('mousedown', e => e.stopPropagation());
+      647 +      menuBtn.addEventListener('click', e => { e.stopPropagation(); menuWrap.classList.toggle('open'); });
+      648 +    }
+      649      ta.focus();
+      650    } else {
+      651      el.innerHTML = bubbleViewHTML(n);
+
+⏺ 以上で完了です。Bubble の編集モードでも「•••」ボタンをクリックすると色選択のドロップダウンが表示されます。
+```
+
 # claudeを起動したときに最初に打つプロンプト
 
 ❯ このプロジェクトが何をしているか理解して

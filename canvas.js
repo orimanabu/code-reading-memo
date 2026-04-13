@@ -605,7 +605,12 @@ function bubbleEditHTML(n) {
   return `
   <div class="bubble-header">
     <div class="node-actions" style="opacity:1">
-      ${colorSwatchesHTML(n.color, 'green')}
+      <div class="edit-menu-wrap">
+        <button class="node-btn btn-edit-menu" title="More options">•••</button>
+        <div class="edit-menu">
+          ${colorSwatchesHTML(n.color, 'green')}
+        </div>
+      </div>
       <button class="node-btn btn-done">✓ Done</button>
       <button class="node-btn danger btn-del">Delete</button>
     </div>
@@ -635,6 +640,12 @@ function renderBubbleContent(n, el) {
         scheduleSave();
       });
     });
+    const menuWrap = el.querySelector('.edit-menu-wrap');
+    const menuBtn  = el.querySelector('.btn-edit-menu');
+    if (menuBtn) {
+      menuBtn.addEventListener('mousedown', e => e.stopPropagation());
+      menuBtn.addEventListener('click', e => { e.stopPropagation(); menuWrap.classList.toggle('open'); });
+    }
     ta.focus();
   } else {
     el.innerHTML = bubbleViewHTML(n);
