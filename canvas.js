@@ -246,6 +246,8 @@ const wrap        = document.getElementById('wrap');
 const canvas      = document.getElementById('canvas');
 const svgLinks    = document.getElementById('svg-links');
 const linkTip     = document.getElementById('link-tip');
+const linkCtx     = document.getElementById('link-ctx');
+const linkCtxDel  = document.getElementById('link-ctx-del');
 const statusEl    = document.getElementById('status');
 const marqueeEl   = document.getElementById('marquee');
 
@@ -786,7 +788,7 @@ function setupNodeEvents(n, el) {
         }
         toggleMultiSel(n.id);
         const count = S.multiSel.size;
-        setStatus(count > 0 ? `${count} block(s) selected — drag header to move all` : 'Ready — double-click to add block | select text to create link | Alt+click to delete link');
+        setStatus(count > 0 ? `${count} block(s) selected — drag header to move all` : 'Ready — double-click to add block | select text to create link | right-click link to delete');
       }
       return;
     }
@@ -1066,6 +1068,12 @@ function renderLinks() {
     g.appendChild(svgE('path', {
       d, class: 'link-path', 'marker-end': 'url(#arrow)'
     }));
+    const hit = svgE('path', { d, class: 'link-hit' });
+    hit.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      showLinkCtx(lnk.id, e.clientX, e.clientY);
+    });
+    g.appendChild(hit);
 
     const mx = (fp.x + tp.x) / 2;
     const my = (fp.y + tp.y) / 2 - 9;
@@ -1102,8 +1110,29 @@ function exitLinkMode() {
   S.pending = null;
   document.body.classList.remove('link-mode');
   linkTip.style.display = 'none';
-  setStatus('Ready — double-click to add block | select text to create link | Alt+click to delete link');
+  setStatus('Ready — double-click to add block | select text to create link | right-click link to delete');
 }
+
+// ═══════════════════════════════════════════════════════
+// LINK CONTEXT MENU
+// ═══════════════════════════════════════════════════════
+function showLinkCtx(linkId, x, y) {
+  linkCtx.style.left = x + 'px';
+  linkCtx.style.top  = y + 'px';
+  linkCtx.style.display = 'block';
+  linkCtxDel.onclick = () => {
+    hideLinkCtx();
+    removeLink(linkId);
+  };
+}
+
+function hideLinkCtx() {
+  linkCtx.style.display = 'none';
+}
+
+document.addEventListener('mousedown', e => {
+  if (!e.target.closest('#link-ctx')) hideLinkCtx();
+});
 
 // ═══════════════════════════════════════════════════════
 // TEXT SELECTION → LINK
@@ -1160,7 +1189,7 @@ wrap.addEventListener('mousedown', e => {
   if (onBg) {
     selectNode(null);
     clearMultiSel();
-    setStatus('Ready — double-click to add block | select text to create link | Alt+click to delete link');
+    setStatus('Ready — double-click to add block | select text to create link | right-click link to delete');
     if (S.editing) stopEdit();
   }
 
@@ -1313,7 +1342,7 @@ document.addEventListener('mouseup', () => {
         }
       });
       const count = S.multiSel.size;
-      setStatus(count > 0 ? `${count} block(s) selected — drag header to move all` : 'Ready — double-click to add block | select text to create link | Alt+click to delete link');
+      setStatus(count > 0 ? `${count} block(s) selected — drag header to move all` : 'Ready — double-click to add block | select text to create link | right-click link to delete');
     }
   }
   S.drag = null; S.resize = null; S.zoomDrag = null;
@@ -2183,7 +2212,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   }
 })()
 
-setStatus('Ready — double-click to add block | select text to create link | Alt+click to delete link');
+setStatus('Ready — double-click to add block | select text to create link | right-click link to delete');
 
 // ═══════════════════════════════════════════════════════
 // TEST EXPORTS (Node.js / Vitest only — not used in browser)

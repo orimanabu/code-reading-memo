@@ -183,10 +183,32 @@ body {
   fill: none; stroke: #388bfd; stroke-width: 1.5;
   opacity: 0.65;
 }
+.link-hit {
+  fill: none; stroke: transparent; stroke-width: 12;
+  cursor: context-menu; pointer-events: stroke;
+}
+.lk { pointer-events: none; }
+.lk:hover .link-path { opacity: 1; stroke-width: 2; }
 .link-label {
   fill: #6e7681; font-size: 11px; font-family: monospace;
   pointer-events: none;
 }
+
+/* ── Link context menu ── */
+#link-ctx {
+  position: fixed; z-index: 310;
+  background: #161b22; border: 1px solid #30363d;
+  border-radius: 6px; padding: 4px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+  display: none;
+}
+#link-ctx button {
+  display: block; width: 100%;
+  background: none; border: none; color: #e6edf3;
+  padding: 6px 14px; font-size: 13px; text-align: left;
+  border-radius: 4px; cursor: pointer; white-space: nowrap;
+}
+#link-ctx button:hover { background: #da3633; color: #fff; }
 
 /* ── Toolbar ── */
 #toolbar {
