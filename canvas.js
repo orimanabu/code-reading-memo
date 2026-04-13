@@ -481,6 +481,7 @@ function renderNode(n, el) {
         e.stopPropagation(); menuWrap.classList.remove('open'); openCodeSnippetdDialog(n.id);
       });
     }
+    bindZOrderButtons(n, el);
 
     ta.focus();
   } else {
@@ -601,6 +602,7 @@ function bubbleEditHTML(n) {
         <button class="node-btn btn-edit-menu" title="More options">•••</button>
         <div class="edit-menu">
           ${colorSwatchesHTML(n.color, 'green')}
+          ${zOrderMenuHTML()}
         </div>
       </div>
       <button class="node-btn btn-done">✓ Done</button>
@@ -638,6 +640,7 @@ function renderBubbleContent(n, el) {
       menuBtn.addEventListener('mousedown', e => e.stopPropagation());
       menuBtn.addEventListener('click', e => { e.stopPropagation(); menuWrap.classList.toggle('open'); });
     }
+    bindZOrderButtons(n, el);
     ta.focus();
   } else {
     el.innerHTML = bubbleViewHTML(n);
@@ -757,9 +760,15 @@ function renderFrameContent(n, el) {
   if (S.editing === n.id) {
     el.innerHTML = `
     <div class="frame-header">
-      <div class="node-actions" style="opacity:1;display:flex;align-items:center;gap:6px;">
-        <input class="inp-title" placeholder="Label" value="${esc(n.label ?? '')}" spellcheck="false">
-        ${colorSwatchesHTML(n.color, 'blue')}
+      <input class="inp-title" placeholder="Label" value="${esc(n.label ?? '')}" spellcheck="false">
+      <div class="node-actions" style="opacity:1">
+        <div class="edit-menu-wrap">
+          <button class="node-btn btn-edit-menu" title="More options">•••</button>
+          <div class="edit-menu">
+            ${colorSwatchesHTML(n.color, 'blue')}
+            ${zOrderMenuHTML()}
+          </div>
+        </div>
         <button class="node-btn btn-done">&#x2713; Done</button>
         <button class="node-btn danger btn-del">Delete</button>
       </div>
@@ -781,6 +790,13 @@ function renderFrameContent(n, el) {
         scheduleSave();
       });
     });
+    const menuWrap = el.querySelector('.edit-menu-wrap');
+    const menuBtn  = el.querySelector('.btn-edit-menu');
+    if (menuBtn) {
+      menuBtn.addEventListener('mousedown', e => e.stopPropagation());
+      menuBtn.addEventListener('click', e => { e.stopPropagation(); menuWrap.classList.toggle('open'); });
+    }
+    bindZOrderButtons(n, el);
     inp.focus(); inp.select();
   } else {
     const labelHtml = n.label
@@ -892,6 +908,7 @@ function editHTML(n) {
           ${colorSwatchesHTML(n.color, 'blue')}
           <button class="node-btn btn-fetch-git">⬇ Fetch</button>
           <button class="node-btn btn-codesnippetd">📦 codesnippetd</button>
+          ${zOrderMenuHTML()}
         </div>
       </div>
       <button class="node-btn btn-done">✓ Done</button>
@@ -1109,6 +1126,53 @@ function removeNode(id) {
   });
 
   renderLinks();
+  scheduleSave();
+}
+
+// ═══════════════════════════════════════════════════════
+// Z-ORDER
+// ═══════════════════════════════════════════════════════
+function zOrderMenuHTML() {
+  return `
+  <div class="menu-sep"></div>
+  <button class="node-btn btn-zorder" data-dir="front">↑↑ Bring to Front</button>
+  <button class="node-btn btn-zorder" data-dir="forward">↑ Bring Forward</button>
+  <button class="node-btn btn-zorder" data-dir="backward">↓ Send Backward</button>
+  <button class="node-btn btn-zorder" data-dir="back">↓↓ Send to Back</button>`;
+}
+
+function bindZOrderButtons(n, el) {
+  el.querySelectorAll('.btn-zorder').forEach(btn => {
+    btn.addEventListener('mousedown', e => e.stopPropagation());
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      el.querySelector('.edit-menu-wrap')?.classList.remove('open');
+      reorderNode(n.id, btn.dataset.dir);
+    });
+  });
+}
+
+function reorderNode(id, dir) {
+  const idx = S.nodes.findIndex(n => n.id === id);
+  if (idx < 0) return;
+  const el = ndEl(id);
+  if (!el) return;
+
+  if (dir === 'front') {
+    S.nodes.push(S.nodes.splice(idx, 1)[0]);
+    canvas.appendChild(el);
+  } else if (dir === 'back') {
+    S.nodes.unshift(S.nodes.splice(idx, 1)[0]);
+    canvas.insertBefore(el, canvas.firstElementChild);
+  } else if (dir === 'forward' && idx < S.nodes.length - 1) {
+    const tmp = S.nodes[idx]; S.nodes[idx] = S.nodes[idx + 1]; S.nodes[idx + 1] = tmp;
+    canvas.insertBefore(ndEl(S.nodes[idx].id), el);
+  } else if (dir === 'backward' && idx > 0) {
+    const tmp = S.nodes[idx]; S.nodes[idx] = S.nodes[idx - 1]; S.nodes[idx - 1] = tmp;
+    canvas.insertBefore(el, ndEl(S.nodes[idx].id));
+  } else {
+    return;
+  }
   scheduleSave();
 }
 

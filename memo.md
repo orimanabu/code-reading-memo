@@ -8352,3 +8352,49 @@ classがついたままの状態です。リンク先のブロックが消えた
 ✻ Worked for 3m 9s
 ```
 
+```
+❯ Frameのタイトルは左端にありますが、編集モードに入ると、Frameのタイトルが右に動いてしまいます。動かなくしてください
+
+  Searched for 2 patterns, read 2 files (ctrl+o to expand)
+
+⏺ Now let me look at renderNode to see the header HTML structure:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Let me look at the frame rendering code:
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+⏺ Found it. In edit mode, the inp-title input is placed inside .node-actions, which has margin-left: auto — so it gets pushed to the right. In view mode, .frame-label is a sibling
+  to .node-actions with flex: 1, keeping it on the left.
+
+  Fix: move the input outside of node-actions in the edit HTML, and give it flex: 1 via CSS.
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 2 lines
+      760    if (S.editing === n.id) {
+      761      el.innerHTML = `
+      762      <div class="frame-header">
+      763 -      <div class="node-actions" style="opacity:1;display:flex;align-items:center;gap:6px;">
+      764 -        <input class="inp-title" placeholder="Label" value="${esc(n.label ?? '')}" spellcheck="false">
+      763 +      <input class="inp-title" placeholder="Label" value="${esc(n.label ?? '')}" spellcheck="false">
+      764 +      <div class="node-actions" style="opacity:1">
+      765          <div class="edit-menu-wrap">
+      766            <button class="node-btn btn-edit-menu" title="More options">•••</button>
+      767            <div class="edit-menu">
+
+⏺ Now update the CSS so .frame-header .inp-title has flex: 1:
+
+⏺ Update(canvas.css)
+  ⎿  Added 1 line, removed 1 line
+      93  .frame-header .inp-title {
+      94    border: none; outline: none;
+      95    font-size: 12px; font-weight: 600; color: var(--fn-label, #79c0ff);
+      96 -  background: transparent; width: 160px;
+      96 +  background: transparent; width: 0; flex: 1; min-width: 0;
+      97  }
+      98  .node.selected {
+      99    border-color: var(--nb-sel, #388bfd);
+
+⏺ これで編集モードに入っても、タイトル入力欄は .frame-label と同じく左側（flex: 1）に配置され、右に移動しなくなります。
+```

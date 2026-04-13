@@ -93,7 +93,7 @@ body {
 .frame-header .inp-title {
   border: none; outline: none;
   font-size: 12px; font-weight: 600; color: var(--fn-label, #79c0ff);
-  background: transparent; width: 160px;
+  background: transparent; width: 0; flex: 1; min-width: 0;
 }
 .node.selected {
   border-color: var(--nb-sel, #388bfd);
@@ -286,6 +286,9 @@ body {
 .edit-menu .color-swatches { margin-bottom: 4px; }
 .edit-menu .node-btn {
   text-align: left; width: 100%;
+}
+.edit-menu .menu-sep {
+  height: 1px; background: #30363d; margin: 4px 0;
 }
 
 /* ── Link context menu ── */
