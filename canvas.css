@@ -351,6 +351,25 @@ kbd {
 .tb-btn.danger { border-color: #da3633; color: #f85149; }
 .tb-btn.danger:hover { background: #3d1f1e; }
 
+.zoom-ctrl {
+  display: flex; align-items: center; gap: 2px;
+}
+.zoom-btn {
+  padding: 3px 7px; font-size: 11px;
+  border: 1px solid #30363d; border-radius: 6px;
+  background: #21262d; color: #c9d1d9; cursor: pointer;
+  line-height: 1;
+}
+.zoom-btn:hover { background: #30363d; }
+.zoom-input {
+  width: 48px; text-align: center; font-size: 12px;
+  border: 1px solid #30363d; border-radius: 6px;
+  background: #21262d; color: #c9d1d9;
+  padding: 3px 4px; outline: none; cursor: default;
+  font-family: inherit;
+}
+.zoom-input:focus { border-color: #388bfd; cursor: text; }
+
 /* ── Link tooltip ── */
 #link-tip {
   position: fixed; z-index: 300;

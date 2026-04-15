@@ -287,6 +287,8 @@ function applyVP() {
   wrap.style.backgroundSize = `${gs}px ${gs}px`;
   wrap.style.backgroundPosition = `${x % gs}px ${y % gs}px`;
   renderLinks();
+  const zi = document.getElementById('zoom-input');
+  if (zi && document.activeElement !== zi) zi.value = Math.round(scale * 100) + '%';
 }
 
 function s2c(sx, sy) {
@@ -2205,6 +2207,44 @@ document.getElementById('btn-git-config').addEventListener('click', openDialog);
     if (e.key === 'Escape' && overlay.style.display !== 'none') close();
   });
 })();
+
+// Zoom controls
+document.getElementById('btn-zoom-out').addEventListener('click', () => {
+  const cx = wrap.clientWidth / 2;
+  const cy = wrap.clientHeight / 2;
+  zoom(1 / 1.2, cx, cy);
+});
+document.getElementById('btn-zoom-in').addEventListener('click', () => {
+  const cx = wrap.clientWidth / 2;
+  const cy = wrap.clientHeight / 2;
+  zoom(1.2, cx, cy);
+});
+document.getElementById('zoom-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    e.target.blur();
+  } else if (e.key === 'Escape') {
+    e.target.value = Math.round(S.vp.scale * 100) + '%';
+    e.target.blur();
+  }
+});
+document.getElementById('zoom-input').addEventListener('blur', e => {
+  const raw = e.target.value.replace('%', '').trim();
+  const pct = parseFloat(raw);
+  if (!isNaN(pct) && pct > 0) {
+    const ns = Math.min(4, Math.max(0.08, pct / 100));
+    const cx = wrap.clientWidth / 2;
+    const cy = wrap.clientHeight / 2;
+    const r = ns / S.vp.scale;
+    S.vp.x = cx - (cx - S.vp.x) * r;
+    S.vp.y = cy - (cy - S.vp.y) * r;
+    S.vp.scale = ns;
+    applyVP();
+    setStatus(`Zoom: ${Math.round(ns * 100)}%`);
+  } else {
+    e.target.value = Math.round(S.vp.scale * 100) + '%';
+  }
+});
 
 // Export
 document.getElementById('btn-export').addEventListener('click', async () => {

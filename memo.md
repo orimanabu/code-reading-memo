@@ -8936,3 +8936,135 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
   - document.body.appendChild(a) / removeChild(a)：Safari はDOMに存在するanchorでないとdownload属性を無視することがある
   - URL.revokeObjectURLをsetTimeoutで遅延：click後すぐに解放するとSafariでダウンロードが中断されることがある
 ```
+
+```
+❯ zoom in, zoom outをCtrl(or Cmd) + drag以外で操作できるようにしたいです。具体的には、ツールバーのGit configとExportの間に `◁` `100%` `▷` の3つの要素を配置し、◁ or
+▷をクリックするとzoom in/outする、「100%」のところはzoom率を表示し、zoom率を手で直接編集して指定することもできる、というふうにしたいです
+
+  Searched for 2 patterns, read 3 files (ctrl+o to expand)
+
+⏺ Now I have all the context I need. I'll implement the zoom controls:
+
+  1. Add HTML elements in canvas.html between Git Config separator and Export
+  2. Add CSS styles in canvas.css
+  3. Update applyVP() in canvas.js to sync the zoom input, and add event listeners
+
+⏺ Update(canvas.html)
+  ⎿  Added 6 lines
+      24    <div class="sep"></div>
+      25    <button class="tb-btn" id="btn-git-config">⎇ Git Config</button>
+      26    <div class="sep"></div>
+      27 +  <div class="zoom-ctrl">
+      28 +    <button class="zoom-btn" id="btn-zoom-out" title="Zoom out">&#9665;</button>
+      29 +    <input id="zoom-input" class="zoom-input" type="text" value="100%" title="Zoom level (click to edit)">
+      30 +    <button class="zoom-btn" id="btn-zoom-in" title="Zoom in">&#9655;</button>
+      31 +  </div>
+      32 +  <div class="sep"></div>
+      33    <button class="tb-btn" id="btn-export">↓ Export</button>
+      34    <label class="tb-btn" id="btn-import-label" style="cursor:pointer;">↑ Import<input type="file" id="btn-import" accept=".json" style="display:none;"></l
+          abel>
+      35    <button class="tb-btn danger" id="btn-clear">🗑 Clear</button>
+
+⏺ Update(canvas.css)
+  ⎿  Added 19 lines
+      351  .tb-btn.danger { border-color: #da3633; color: #f85149; }
+      352  .tb-btn.danger:hover { background: #3d1f1e; }
+      353
+      354 +.zoom-ctrl {
+      355 +  display: flex; align-items: center; gap: 2px;
+      356 +}
+      357 +.zoom-btn {
+      358 +  padding: 3px 7px; font-size: 11px;
+      359 +  border: 1px solid #30363d; border-radius: 6px;
+      360 +  background: #21262d; color: #c9d1d9; cursor: pointer;
+      361 +  line-height: 1;
+      362 +}
+      363 +.zoom-btn:hover { background: #30363d; }
+      364 +.zoom-input {
+      365 +  width: 48px; text-align: center; font-size: 12px;
+      366 +  border: 1px solid #30363d; border-radius: 6px;
+      367 +  background: #21262d; color: #c9d1d9;
+      368 +  padding: 3px 4px; outline: none; cursor: default;
+      369 +  font-family: inherit;
+      370 +}
+      371 +.zoom-input:focus { border-color: #388bfd; cursor: text; }
+      372 +
+      373  /* ── Link tooltip ── */
+      374  #link-tip {
+      375    position: fixed; z-index: 300;
+
+⏺ Now update applyVP() to sync the zoom input, and add event listeners for the buttons:
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines
+      287    wrap.style.backgroundSize = `${gs}px ${gs}px`;
+      288    wrap.style.backgroundPosition = `${x % gs}px ${y % gs}px`;
+      289    renderLinks();
+      290 +  const zi = document.getElementById('zoom-input');
+      291 +  if (zi && document.activeElement !== zi) zi.value = Math.round(scale * 100) + '%';
+      292  }
+      293
+      294  function s2c(sx, sy) {
+
+⏺ Now find where the DOM-ready / init section is to add the event listeners:
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 38 lines
+      2208    });
+      2209  })();
+      2210
+      2211 +// Zoom controls
+      2212 +document.getElementById('btn-zoom-out').addEventListener('click', () => {
+      2213 +  const cx = wrap.clientWidth / 2;
+      2214 +  const cy = wrap.clientHeight / 2;
+      2215 +  zoom(1 / 1.2, cx, cy);
+      2216 +});
+      2217 +document.getElementById('btn-zoom-in').addEventListener('click', () => {
+      2218 +  const cx = wrap.clientWidth / 2;
+      2219 +  const cy = wrap.clientHeight / 2;
+      2220 +  zoom(1.2, cx, cy);
+      2221 +});
+      2222 +document.getElementById('zoom-input').addEventListener('keydown', e => {
+      2223 +  if (e.key === 'Enter') {
+      2224 +    e.preventDefault();
+      2225 +    e.target.blur();
+      2226 +  } else if (e.key === 'Escape') {
+      2227 +    e.target.value = Math.round(S.vp.scale * 100) + '%';
+      2228 +    e.target.blur();
+      2229 +  }
+      2230 +});
+      2231 +document.getElementById('zoom-input').addEventListener('blur', e => {
+      2232 +  const raw = e.target.value.replace('%', '').trim();
+      2233 +  const pct = parseFloat(raw);
+      2234 +  if (!isNaN(pct) && pct > 0) {
+      2235 +    const ns = Math.min(4, Math.max(0.08, pct / 100));
+      2236 +    const cx = wrap.clientWidth / 2;
+      2237 +    const cy = wrap.clientHeight / 2;
+      2238 +    const r = ns / S.vp.scale;
+      2239 +    S.vp.x = cx - (cx - S.vp.x) * r;
+      2240 +    S.vp.y = cy - (cy - S.vp.y) * r;
+      2241 +    S.vp.scale = ns;
+      2242 +    applyVP();
+      2243 +    setStatus(`Zoom: ${Math.round(ns * 100)}%`);
+      2244 +  } else {
+      2245 +    e.target.value = Math.round(S.vp.scale * 100) + '%';
+      2246 +  }
+      2247 +});
+      2248 +
+      2249  // Export
+      2250  document.getElementById('btn-export').addEventListener('click', async () => {
+      2251    saveState();
+
+⏺ 実装完了です。変更内容：
+
+  canvas.html: Git Configセパレーターとエクスポートボタンの間に ◁ 100% ▷ のズームコントロールを追加。
+
+  canvas.css: .zoom-ctrl、.zoom-btn、.zoom-input のスタイルを追加。ツールバーの既存デザインに合わせた配色・サイズ。
+
+  canvas.js:
+  - applyVP() にズーム表示の同期処理を追加（入力欄がフォーカス中は更新しない）
+  - ◁ / ▷ ボタン：ビューポート中心を基準に 1.2 倍ずつズームイン/アウト
+  - ズーム入力欄：Enter または フォーカスアウトで値を適用、Escape でキャンセル。% 付き・なしどちらでも入力可能
+```
