@@ -618,10 +618,11 @@ function bubbleEditHTML(n) {
 }
 
 function renderBubbleContent(n, el) {
+  el.classList.toggle('is-editing', S.editing === n.id);
   if (S.editing === n.id) {
     el.innerHTML = bubbleEditHTML(n);
     const ta = el.querySelector('textarea');
-    ta.style.height = (n.h - 54) + 'px';
+    ta.style.height = (n.h - 24) + 'px';
     ta.addEventListener('input', () => { n.text = ta.value; });
     el.querySelector('.btn-done').addEventListener('click', e => { e.stopPropagation(); stopEdit(); });
     el.querySelector('.btn-del').addEventListener('click', e => { e.stopPropagation(); removeNode(n.id); });
@@ -1651,8 +1652,9 @@ document.addEventListener('mousemove', e => {
         el.style.width  = n.w + 'px';
         el.style.height = n.h + 'px';
         const ta = el.querySelector('textarea');
-        if (ta) ta.style.height = (n.h - 42) + 'px';
+        if (ta) ta.style.height = (n.h - 24) + 'px';
       }
+      if (n.type === 'bubble') renderBubbleTail(n);
       renderLinks();
     }
   } else if (S.marquee) {
@@ -1673,9 +1675,26 @@ document.addEventListener('mousemove', e => {
 document.addEventListener('mouseup', () => {
   if (S.drag) {
     if (S.drag.multiOrigins) {
-      S.drag.multiOrigins.forEach((_, id) => ndEl(id)?.classList.remove('dragging'));
+      S.drag.multiOrigins.forEach((_, id) => {
+        const el = ndEl(id);
+        if (!el) return;
+        el.classList.remove('dragging');
+        const n = S.nodes.find(n => n.id === id);
+        if (n?.type === 'bubble') {
+          el.classList.add('drag-released');
+          el.addEventListener('mouseleave', () => el.classList.remove('drag-released'), { once: true });
+        }
+      });
     } else {
-      ndEl(S.drag.id)?.classList.remove('dragging');
+      const el = ndEl(S.drag.id);
+      if (el) {
+        el.classList.remove('dragging');
+        const n = S.nodes.find(n => n.id === S.drag.id);
+        if (n?.type === 'bubble') {
+          el.classList.add('drag-released');
+          el.addEventListener('mouseleave', () => el.classList.remove('drag-released'), { once: true });
+        }
+      }
     }
   }
   if (S.tailDrag) { S.tailDrag = null; scheduleSave(); }

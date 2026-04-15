@@ -471,17 +471,34 @@ body.link-mode .node:hover {
   box-shadow: 0 0 0 3px var(--bn-glow-msel, rgba(63,185,80,0.42)), 0 8px 32px rgba(0,0,0,0.55);
 }
 .bubble-header {
+  position: absolute;
+  bottom: calc(100% - 3px); /* overlap the bubble's top border by 3px */
+  left: -3px; right: -3px;
   display: flex; align-items: center; justify-content: flex-end;
-  padding: 5px 10px;
+  padding: 5px 10px; min-height: 34px;
   background: var(--bh-bg, #1b2e1b);
-  border-bottom: 1px solid var(--bh-border, #2d4a2d);
+  border: 3px solid var(--bn-border, #3fb950);
+  border-bottom: none;
   border-radius: 12px 12px 0 0;
-  cursor: grab; min-height: 34px;
+  cursor: grab;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 1;
 }
 .bubble-header:active { cursor: grabbing; }
+.bubble-node:hover .bubble-header,
+.bubble-node.is-editing .bubble-header {
+  opacity: 1; pointer-events: auto;
+}
+.bubble-node.drag-released .bubble-header {
+  opacity: 0 !important; pointer-events: none !important;
+}
+.bubble-node:hover .bubble-header .node-actions,
+.bubble-node.is-editing .bubble-header .node-actions { opacity: 1; }
 .bubble-body {
   flex: 1; padding: 10px 14px 14px;
   overflow: auto;
+  display: flex; flex-direction: column; justify-content: center;
 }
 .bubble-text {
   font-size: 13px; color: #e6edf3; line-height: 1.65;

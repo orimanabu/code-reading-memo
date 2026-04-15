@@ -9192,3 +9192,284 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 ⏺ ツールバーの getBoundingClientRect().bottom
   で実際の下端を動的に取得し、その分を上部パディングに加算するようにしました。これでfit後のコンテンツがツールバーと重なりません。
 ```
+
+```
+❯ Bubbleの上端、Editと☓マークが表示される部分が余白として無駄に感じます。普段はこの余白は表示せず、Bubbleにマウスをhoverしたときだけ表示するようにできますか
+
+  Searched for 4 patterns, read 2 files (ctrl+o to expand)
+
+⏺ 理解しました。ヘッダー部分を通常は非表示（最小高さ）にし、hover時だけ展開する実装をします。ドラッグ用のグラブ領域は薄い帯として残します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.css)
+  ⎿  Added 14 lines, removed 3 lines
+      472  }
+      473  .bubble-header {
+      474    display: flex; align-items: center; justify-content: flex-end;
+      475 +  padding: 2px 10px;
+      476 +  background: transparent;
+      477 +  border-bottom: none;
+      478 +  border-radius: 12px 12px 0 0;
+      479 +  cursor: grab; min-height: 0;
+      480 +  overflow: hidden;
+      481 +  transition: padding 0.15s, min-height 0.15s, background 0.15s, border-bottom 0.15s;
+      482 +}
+      483 +.bubble-header:active { cursor: grabbing; }
+      484 +.bubble-node:hover .bubble-header,
+      485 +.bubble-node.selected .bubble-header {
+      486    padding: 5px 10px;
+      487    background: var(--bh-bg, #1b2e1b);
+      488    border-bottom: 1px solid var(--bh-border, #2d4a2d);
+      478 -  border-radius: 12px 12px 0 0;
+      479 -  cursor: grab; min-height: 34px;
+      489 +  min-height: 34px;
+      490  }
+      481 -.bubble-header:active { cursor: grabbing; }
+      491 +.bubble-node:hover .bubble-header .node-actions,
+      492 +.bubble-node.selected .bubble-header .node-actions { opacity: 1; }
+      493  .bubble-body {
+      494    flex: 1; padding: 10px 14px 14px;
+      495    overflow: auto;
+
+⏺ これで：
+
+  - 通常時: ヘッダーは高さ2px程度の透明な帯（ドラッグ用グラブ領域として機能）
+  - hover時 / selected時: ヘッダーが展開されてEdit・✕ボタンが表示される（0.15sのスムーズなトランジション付き）
+
+  編集中（bubbleEditHTML）のDone/Deleteボタンは style="opacity:1" でインライン指定されているので、hover状態でも編集状態でも正しく表示されます。
+
+✻ Cooked for 1m 46s
+
+❯ Bubbleの外枠自体を小さくし(ヘッダー分高さを短くし)、hoversita
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ Bubbleの外枠自体を小さくし(ヘッダー分高さを短くし)、hoverしたら上に伸びてボタンが見える、という見た目にできますか
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ ノードの高さを変えずに、ヘッダーをbubbleの上に飛び出す形で実装します。position: absolute; bottom: 100% でbubble外枠の上に配置し、hoverで表示します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.css)
+  ⎿  Added 15 lines, removed 11 lines
+      471    box-shadow: 0 0 0 3px var(--bn-glow-msel, rgba(63,185,80,0.42)), 0 8px 32px rgba(0,0,0,0.55);
+      472  }
+      473  .bubble-header {
+      474 +  position: absolute;
+      475 +  bottom: calc(100% - 3px); /* overlap the bubble's top border by 3px */
+      476 +  left: -3px; right: -3px;
+      477    display: flex; align-items: center; justify-content: flex-end;
+      475 -  padding: 2px 10px;
+      476 -  background: transparent;
+      478 +  padding: 5px 10px; min-height: 34px;
+      479 +  background: var(--bh-bg, #1b2e1b);
+      480 +  border: 3px solid var(--bn-border, #3fb950);
+      481    border-bottom: none;
+      482    border-radius: 12px 12px 0 0;
+      479 -  cursor: grab; min-height: 0;
+      480 -  overflow: hidden;
+      481 -  transition: padding 0.15s, min-height 0.15s, background 0.15s, border-bottom 0.15s;
+      483 +  cursor: grab;
+      484 +  opacity: 0; pointer-events: none;
+      485 +  transition: opacity 0.15s;
+      486 +  z-index: 1;
+      487  }
+      488  .bubble-header:active { cursor: grabbing; }
+      489  .bubble-node:hover .bubble-header,
+      485 -.bubble-node.selected .bubble-header {
+      486 -  padding: 5px 10px;
+      487 -  background: var(--bh-bg, #1b2e1b);
+      488 -  border-bottom: 1px solid var(--bh-border, #2d4a2d);
+      489 -  min-height: 34px;
+      490 +.bubble-node.selected .bubble-header,
+      491 +.bubble-node.is-editing .bubble-header {
+      492 +  opacity: 1; pointer-events: auto;
+      493  }
+      494  .bubble-node:hover .bubble-header .node-actions,
+      492 -.bubble-node.selected .bubble-header .node-actions { opacity: 1; }
+      495 +.bubble-node.selected .bubble-header .node-actions,
+      496 +.bubble-node.is-editing .bubble-header .node-actions { opacity: 1; }
+      497  .bubble-body {
+      498    flex: 1; padding: 10px 14px 14px;
+      499    overflow: auto;
+
+⏺ 次に renderBubbleContent で編集中は is-editing クラスを付与します（hoverなしでも常にヘッダーを表示するため）：
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      618  }
+      619
+      620  function renderBubbleContent(n, el) {
+      621 +  el.classList.toggle('is-editing', S.editing === n.id);
+      622    if (S.editing === n.id) {
+      623      el.innerHTML = bubbleEditHTML(n);
+      624      const ta = el.querySelector('textarea');
+
+⏺ また、.bubble-body がbubble全体の高さを占めるよう、テキストエリア高さ計算を調整します（ヘッダーがflow外になったので -54px の補正が不要になります）：
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ ヘッダーがflow外になったので、textareaの高さ補正を更新します（-54 → -24、bodyのpadding分のみ）：
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      622    if (S.editing === n.id) {
+      623      el.innerHTML = bubbleEditHTML(n);
+      624      const ta = el.querySelector('textarea');
+      625 -    ta.style.height = (n.h - 54) + 'px';
+      625 +    ta.style.height = (n.h - 24) + 'px';
+      626      ta.addEventListener('input', () => { n.text = ta.value; });
+      627      el.querySelector('.btn-done').addEventListener('click', e => { e.stopPropagation(); stopEdit(); });
+      628      el.querySelector('.btn-del').addEventListener('click', e => { e.stopPropagation(); removeNode(n.id); });
+
+⏺ 変更の概要：
+
+  - .bubble-header: position: absolute; bottom: calc(100% - 3px) でbubble外枠の上に配置。left: -3px; right: -3px
+  でbubbleのborder（3px）に合わせてぴったりつながるよう配置。デフォルトは opacity: 0; pointer-events: none
+  - hover / selected / is-editing 時: opacity: 1; pointer-events: auto でヘッダーが上に現れる
+  - is-editing クラス: 編集中はhoverなしでもヘッダーを常に表示
+  - textarea高さ: ヘッダーがflow外になったため -54 → -24（bodyのpadding分のみ）に修正
+
+✻ Cogitated for 1m 41s
+
+❯ だいぶいい感じになりました。2点修正をお願いします。(1) bubbleのテキストを上下中央に配置してください (2) bubbleの高さを変更した際、尻尾が追従しません。修正してください
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+⏺ 問題が2つ確認できました：
+  1. .bubble-body に縦中央配置が未設定
+  2. リサイズハンドラ内で renderBubbleTail() が呼ばれていない（さらに textarea 高さ補正も -42 のまま）
+
+  まとめて修正します。
+
+⏺ Update(canvas.css)
+  ⎿  Added 1 line
+      497  .bubble-body {
+      498    flex: 1; padding: 10px 14px 14px;
+      499    overflow: auto;
+      500 +  display: flex; flex-direction: column; justify-content: center;
+      501  }
+      502  .bubble-text {
+      503    font-size: 13px; color: #e6edf3; line-height: 1.65;
+
+⏺ 次にリサイズハンドラ：テール追従と textarea 高さ補正を修正します。
+
+⏺ Update(canvas.js)
+  ⎿  Error editing file
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 1 line
+      1652          el.style.width  = n.w + 'px';
+      1653          el.style.height = n.h + 'px';
+      1654          const ta = el.querySelector('textarea');
+      1655 -        if (ta) ta.style.height = (n.h - 42) + 'px';
+      1655 +        if (ta) ta.style.height = (n.h - 24) + 'px';
+      1656        }
+      1657 +      if (n.type === 'bubble') renderBubbleTail(n);
+      1658        renderLinks();
+      1659      }
+      1660    } else if (S.marquee) {
+
+⏺ 3点まとめて修正しました：
+
+  1. テキスト縦中央: .bubble-body に display: flex; flex-direction: column; justify-content: center を追加
+  2. 尻尾の追従: リサイズハンドラに renderBubbleTail(n) を追加
+  3. textarea高さ補正: リサイズ時の -42 → -24（ヘッダーがflow外になった分の修正）
+
+✻ Cooked for 39s
+
+❯ hoverしてヘッダーを出し、そこをドラッグしてbubbleを動かした際、ドラッグを終了してもヘッダーが表示されたままになります。ドラッグを終了したら自動的にヘッダーを隠すことは
+できますか
+
+⏺ ドラッグ終了後もポインターがbubble上にあるため :hover が継続してしまうのが原因です。ドラッグ終了時に drag-released クラスを付けてヘッダーを強制的に隠し、mouseleave
+  で外れたらクラスを外す方法で対応します。
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ ドラッグ終了時にbubbleノードへ drag-released クラスを付け、mouseleave で外す実装をします。
+
+⏺ Update(canvas.js)
+  ⎿  Added 19 lines, removed 2 lines
+      1675  document.addEventListener('mouseup', () => {
+      1676    if (S.drag) {
+      1677      if (S.drag.multiOrigins) {
+      1678 -      S.drag.multiOrigins.forEach((_, id) => ndEl(id)?.classList.remove('dragging'));
+      1678 +      S.drag.multiOrigins.forEach((_, id) => {
+      1679 +        const el = ndEl(id);
+      1680 +        if (!el) return;
+      1681 +        el.classList.remove('dragging');
+      1682 +        const n = S.nodes.find(n => n.id === id);
+      1683 +        if (n?.type === 'bubble') {
+      1684 +          el.classList.add('drag-released');
+      1685 +          el.addEventListener('mouseleave', () => el.classList.remove('drag-released'), { once: true });
+      1686 +        }
+      1687 +      });
+      1688      } else {
+      1680 -      ndEl(S.drag.id)?.classList.remove('dragging');
+      1689 +      const el = ndEl(S.drag.id);
+      1690 +      if (el) {
+      1691 +        el.classList.remove('dragging');
+      1692 +        const n = S.nodes.find(n => n.id === S.drag.id);
+      1693 +        if (n?.type === 'bubble') {
+      1694 +          el.classList.add('drag-released');
+      1695 +          el.addEventListener('mouseleave', () => el.classList.remove('drag-released'), { once: true });
+      1696 +        }
+      1697 +      }
+      1698      }
+      1699    }
+      1700    if (S.tailDrag) { S.tailDrag = null; scheduleSave(); }
+
+⏺ CSSで drag-released クラスの時はヘッダーを隠します。
+
+⏺ Update(canvas.css)
+  ⎿  Added 3 lines
+      491  .bubble-node.is-editing .bubble-header {
+      492    opacity: 1; pointer-events: auto;
+      493  }
+      494 +.bubble-node.drag-released .bubble-header {
+      495 +  opacity: 0 !important; pointer-events: none !important;
+      496 +}
+      497  .bubble-node:hover .bubble-header .node-actions,
+      498  .bubble-node.selected .bubble-header .node-actions,
+      499  .bubble-node.is-editing .bubble-header .node-actions { opacity: 1; }
+
+⏺ 動作フロー：
+  1. ドラッグ終了 → drag-released クラスが付き、ヘッダーが即座に隠れる
+  2. マウスがbubbleの外に出た瞬間 → mouseleave で drag-released クラスが外れる（次回hoverで再び表示可能な状態に戻る）
+
+❯ ドラッグが終了すると、ヘッダーが隠れるようになりました。さらに1点修正をお願いします。ドラッグ終了後再度同じBubbleにhoverすると、ヘッダーが表示されますが(想定どおり)、
+その後hoverを外してもヘッダーが表示されたままになります(ヘッダーが隠れてほしいです)。調査してください
+
+⏺ 原因が特定できます。ドラッグ後にbubbleノードが .selected クラスを持つため、.bubble-node.selected .bubble-header { opacity: 1 }
+  のルールでhoverを外しても常にヘッダーが表示され続けています。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ .selected をbubbleヘッダーの表示条件から外します（hoverと編集中のみに限定）。
+
+⏺ Update(canvas.css)
+  ⎿  Removed 2 lines
+      487  }
+      488  .bubble-header:active { cursor: grabbing; }
+      489  .bubble-node:hover .bubble-header,
+      490 -.bubble-node.selected .bubble-header,
+      490  .bubble-node.is-editing .bubble-header {
+      491    opacity: 1; pointer-events: auto;
+      492  }
+     ...
+      494    opacity: 0 !important; pointer-events: none !important;
+      495  }
+      496  .bubble-node:hover .bubble-header .node-actions,
+      498 -.bubble-node.selected .bubble-header .node-actions,
+      497  .bubble-node.is-editing .bubble-header .node-actions { opacity: 1; }
+      498  .bubble-body {
+      499    flex: 1; padding: 10px 14px 14px;
+
+⏺ 原因は .bubble-node.selected .bubble-header ルールでした。ドラッグ後にノードが選択状態（.selected）になるため、hoverを外してもヘッダーが表示され続けていました。
+
+  selected をbubbleヘッダーの表示条件から除外し、hover中 と 編集中（is-editing） のみヘッダーを表示するよう修正しました。
+```
