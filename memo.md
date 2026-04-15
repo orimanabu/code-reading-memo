@@ -8897,3 +8897,42 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
   /pipe と /snippets の両方のcatchブロックで使用しています。
 ```
+
+```
+❯ Safariで日本語を含むデータをExportすると、ファイルダウンロードのダイアログが開かず、ブラウザの画面にjsonが表示されました。Safariでもファイルダウンロードダイアログが開
+くようにできますか
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ 問題は2つあります：
+
+  1. SafariはBlob URLのdownload属性を正しく処理せず、application/jsonをインラインで表示してしまう
+  2. URL.revokeObjectURLをclick()の直後に同期的に呼んでいるため、Safariで間に合わない場合がある
+
+  修正方法：MIMEタイプをapplication/octet-streamに変更し、anchorをDOMに追加してからクリックする。
+
+⏺ Update(canvas.js)
+  ⎿  Added 4 lines, removed 2 lines
+      2228        // Fall through to legacy download on other errors
+      2229      }
+      2230    }
+      2231 -  const blob = new Blob([data], { type: 'application/json' });
+      2231 +  const blob = new Blob([data], { type: 'application/octet-stream' });
+      2232    const a = document.createElement('a');
+      2233    a.href = URL.createObjectURL(blob);
+      2234    a.download = suggestedName;
+      2235 +  document.body.appendChild(a);
+      2236    a.click();
+      2236 -  URL.revokeObjectURL(a.href);
+      2237 +  document.body.removeChild(a);
+      2238 +  setTimeout(() => URL.revokeObjectURL(a.href), 100);
+      2239    setStatus('Exported');
+      2240  });
+      2241
+
+⏺ 変更内容：
+
+  - application/json → application/octet-stream：SafariがJSONをインライン表示するのを防ぎ、強制ダウンロードさせる
+  - document.body.appendChild(a) / removeChild(a)：Safari はDOMに存在するanchorでないとdownload属性を無視することがある
+  - URL.revokeObjectURLをsetTimeoutで遅延：click後すぐに解放するとSafariでダウンロードが中断されることがある
+```
