@@ -8692,3 +8692,208 @@ static void blk_mq_complete_send_ipi(struct request *rq)
 
 ✻ Baked for 44s
 ```
+
+```
+❯ code-canvasをgithub pagesで公開しています：https://orimanabu.github.io/code-canvas/canvas.html
+このページを開きながら手元のcodesnippetdと連携したいのですが、ブラウザのコンソールを見ると Fetch API cannot load http://localhost:8999/pipe due to
+access control checks. というエラーが出て/pipe APIでcodesnippetdと通信できません。調査をお願いします
+
+⏺ まずコードを調査して、/pipe APIの実装と問題を理解します。
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ 問題の核心を把握するため、fetch周りのコードをもう少し確認します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 問題を理解しました。原因を説明します。
+
+  原因
+
+  CORS（Cross-Origin Resource Sharing）ポリシー違反です。
+
+  ┌──────────────────┬─────────────────────────────┐
+  │                  │             値              │
+  ├──────────────────┼─────────────────────────────┤
+  │ ページのオリジン │ https://orimanabu.github.io │
+  ├──────────────────┼─────────────────────────────┤
+  │ APIのオリジン    │ http://localhost:8999       │
+  └──────────────────┴─────────────────────────────┘
+
+  ブラウザは異なるオリジン間のリクエストを制限します。canvas.js:2505 でのfetchリクエスト：
+
+  const res = await fetch(`http://${endpoint}/pipe`);
+
+  GitHub Pages（HTTPS）からlocalhost（HTTP）へのリクエスト時、codesnippetdのレスポンスに Access-Control-Allow-Origin
+  ヘッダーが含まれていないため、ブラウザがブロックします。
+
+  ▎ 補足：Mixed Content（HTTPS→HTTP）はChrome/Firefoxともにlocalhostは例外扱いするため、今回の主因はCORSのみです。
+
+  対処法
+
+  根本的な修正：codesnippetd側にCORSヘッダーを追加
+
+  codesnippetdサーバーのレスポンスに以下のヘッダーを追加する必要があります：
+
+  Access-Control-Allow-Origin: https://orimanabu.github.io
+  Access-Control-Allow-Methods: GET, OPTIONS
+
+  または開発用に全オリジンを許可する場合：
+
+  Access-Control-Allow-Origin: *
+
+  canvas.js側でエラーメッセージを改善（補助的）
+
+  エラーメッセージがわかりにくいので、CORS問題を検出して具体的なメッセージを表示するよう改善することもできます。該当箇所はこちら（canvas.js:2530-2533）：
+
+  } catch (e) {
+    showMain();
+    setNote(`✗ Fetch failed: ${e.message}`, 'err');
+  }
+
+  CORSエラーはFetch APIでは TypeError: Failed to fetch（またはFirefoxでは NetworkError）として届くため、判別してヒントを出せます。改修しますか？
+
+  ---
+  codesnippetdの実装はお手元にありますか？ もしそうであれば、該当サーバーのコードを見てCORSヘッダー追加の修正もお手伝いできます。
+
+✻ Brewed for 54s
+
+❯ codesnippetdのソースコードはこのパスにあります: ~/devel/src/github.com/orimanabu/codesnippetd
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ コードを確認しました。興味深い発見が2点あります。
+
+  調査結果
+
+  1. codesnippetd側のCORSミドルウェアは既に実装済み
+
+  main.go:97-108 にCORSミドルウェアが実装され、line 685 で適用されています：
+
+  func corsMiddleware(next http.Handler) http.Handler {
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+          w.Header().Set("Access-Control-Allow-Origin", "*")
+          ...
+      })
+  }
+  // ...
+  http.ListenAndServe(listenAddr, corsMiddleware(accessLog(mux)))
+
+  つまり CORS設定は問題ではありません。
+
+  2. 本当の原因：Mixed Content（HTTPS → HTTP）
+
+  エラーメッセージ "due to access control checks" はWebKit/Safariがmixed contentをブロックした際の典型的なメッセージです。
+
+  ┌─────────────┬────────────────────────────────────────────────┐
+  │  ブラウザ   │ https:// ページから http://localhost へのfetch │
+  ├─────────────┼────────────────────────────────────────────────┤
+  │ Chrome/Edge │ localhost は例外扱いで 許可                    │
+  ├─────────────┼────────────────────────────────────────────────┤
+  │ Safari      │ mixed contentとして ブロック                   │
+  └─────────────┴────────────────────────────────────────────────┘
+
+  GitHub Pages（https://orimanabu.github.io）からHTTPのlocalhost:8999へのリクエストがSafariでは完全にブロックされます。
+
+  3. おまけ：/pipe のContent-Typeの不一致
+
+  main.go:554を見ると：
+
+  w.Header().Set("Content-Type", "application/octet-stream")
+
+  canvas.jsは res.json() でJSONとしてパースを試みます。CORSが通っても、piped dataがJSONでないと Invalid /pipe response
+  エラーになります（Content-Type自体は res.json() の動作に影響しませんが、明示的に application/json にすべきです）。
+
+  ---
+  解決策
+
+  根本的な修正（Safari対応）：codesnippetdにHTTPS対応を追加するか、以下のワークアラウンドを使用：
+
+  ワークアラウンド1（推奨）：canvas.htmlをローカルで開く
+  # ローカルサーバーで動かす
+  python3 -m http.server 8080
+  # → http://localhost:8080/canvas.html で開く（HTTPなのでMixed Contentにならない）
+
+  ワークアラウンド2：SafariではなくChromeを使う
+
+  ---
+  codesnippetdにTLS（HTTPS）サポートを追加する修正も可能ですが、自己署名証明書の問題が別途出ます。どのアプローチが良いか教えてください。
+
+✻ Churned for 57s
+
+❯ fetchのエラーをわかりやすく表示する変更をお願いします
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ エラーの種類（ネットワーク不達・Mixed Content・HTTPエラー・JSONパースエラー）を判別して、それぞれ具体的なメッセージを表示するヘルパー関数を追加します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 19 lines
+      2272  // ═══════════════════════════════════════════════════════
+      2273  // CODESNIPPETD DIALOG
+      2274  // ═══════════════════════════════════════════════════════
+      2275 +
+      2276 +// Returns a human-readable error message for a failed fetch to a codesnippetd endpoint.
+      2277 +// Distinguishes mixed-content blocking (HTTPS page → HTTP server) from other network
+      2278 +// failures and HTTP-level errors so the user knows what to fix.
+      2279 +function describeFetchError(e, targetUrl) {
+      2280 +  if (e instanceof TypeError) {
+      2281 +    // TypeError means the request never reached the server (network-level failure).
+      2282 +    // On Safari, HTTPS pages cannot fetch HTTP URLs — not even localhost — and the
+      2283 +    // browser surfaces this as a TypeError with a message about "access control checks".
+      2284 +    if (location.protocol === 'https:' && targetUrl.startsWith('http://')) {
+      2285 +      return '✗ Connection blocked: this page is served over HTTPS but the codesnippetd endpoint uses HTTP. '
+      2286 +           + 'Safari blocks this (mixed content). Fix: open canvas.html from a local server (http://localhost/...) or use Chrome.';
+      2287 +    }
+      2288 +    // Server not running, wrong port, or other network failure.
+      2289 +    return `✗ Cannot reach server — is codesnippetd running? (${e.message})`;
+      2290 +  }
+      2291 +  return `✗ Fetch failed: ${e.message}`;
+      2292 +}
+      2293 +
+      2294  (function () {
+      2295    const overlay          = document.getElementById('codesnippetd-dialog-overlay');
+      2296    const endpointEl       = document.getElementById('csd-endpoint');
+
+⏺ 次に2箇所の catch ブロックを更新します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      2548          }
+      2549        } catch (e) {
+      2550          showMain();
+      2551 -        setNote(`✗ Fetch failed: ${e.message}`, 'err');
+      2551 +        setNote(describeFetchError(e, `http://${endpoint}/pipe`), 'err');
+      2552        }
+      2553        fetchBtn.disabled = false;
+      2554        return;
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      2585          showResults();
+      2586        }
+      2587      } catch (e) {
+      2588 -      setNote(`✗ Fetch failed: ${e.message}`, 'err');
+      2588 +      setNote(describeFetchError(e, tagsUrl), 'err');
+      2589      }
+      2590      fetchBtn.disabled = false;
+      2591    });
+
+⏺ 変更内容をまとめます。
+
+  describeFetchError(e, targetUrl) ヘルパーを追加し、以下の3パターンを判別します：
+
+  ┌────────────────────────────────────────┬────────────────────────────────────────────────────────────────────┐
+  │              エラーの種類              │                           表示メッセージ                           │
+  ├────────────────────────────────────────┼────────────────────────────────────────────────────────────────────┤
+  │ Mixed Content（SafariでHTTPS→HTTP）    │ ブロックされた理由と対処法（ローカルサーバーかChromeを使う）を明示 │
+  ├────────────────────────────────────────┼────────────────────────────────────────────────────────────────────┤
+  │ ネットワーク不達（サーバー未起動など） │ 「codesnippetdは起動していますか？」とヒント付き                   │
+  ├────────────────────────────────────────┼────────────────────────────────────────────────────────────────────┤
+  │ HTTPエラー / JSONパースエラー          │ 従来通りエラー内容をそのまま表示                                   │
+  └────────────────────────────────────────┴────────────────────────────────────────────────────────────────────┘
+
+  /pipe と /snippets の両方のcatchブロックで使用しています。
+```

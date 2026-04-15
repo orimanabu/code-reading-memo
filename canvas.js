@@ -2272,6 +2272,25 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 // ═══════════════════════════════════════════════════════
 // CODESNIPPETD DIALOG
 // ═══════════════════════════════════════════════════════
+
+// Returns a human-readable error message for a failed fetch to a codesnippetd endpoint.
+// Distinguishes mixed-content blocking (HTTPS page → HTTP server) from other network
+// failures and HTTP-level errors so the user knows what to fix.
+function describeFetchError(e, targetUrl) {
+  if (e instanceof TypeError) {
+    // TypeError means the request never reached the server (network-level failure).
+    // On Safari, HTTPS pages cannot fetch HTTP URLs — not even localhost — and the
+    // browser surfaces this as a TypeError with a message about "access control checks".
+    if (location.protocol === 'https:' && targetUrl.startsWith('http://')) {
+      return '✗ Connection blocked: this page is served over HTTPS but the codesnippetd endpoint uses HTTP. '
+           + 'Safari blocks this (mixed content). Fix: open canvas.html from a local server (http://localhost/...) or use Chrome.';
+    }
+    // Server not running, wrong port, or other network failure.
+    return `✗ Cannot reach server — is codesnippetd running? (${e.message})`;
+  }
+  return `✗ Fetch failed: ${e.message}`;
+}
+
 (function () {
   const overlay          = document.getElementById('codesnippetd-dialog-overlay');
   const endpointEl       = document.getElementById('csd-endpoint');
@@ -2529,7 +2548,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
         }
       } catch (e) {
         showMain();
-        setNote(`✗ Fetch failed: ${e.message}`, 'err');
+        setNote(describeFetchError(e, `http://${endpoint}/pipe`), 'err');
       }
       fetchBtn.disabled = false;
       return;
@@ -2566,7 +2585,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
         showResults();
       }
     } catch (e) {
-      setNote(`✗ Fetch failed: ${e.message}`, 'err');
+      setNote(describeFetchError(e, tagsUrl), 'err');
     }
     fetchBtn.disabled = false;
   });
