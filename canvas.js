@@ -670,12 +670,15 @@ function renderBubbleTail(n) {
   }
   while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-  // All coordinates in canvas pixels, relative to bubble div's top-left corner
-  const cx  = n.w / 2;
-  const cy  = n.h / 2;
-  const bl  = { x: 0,   y: 0   };
-  const br  = { x: n.w, y: n.h };
-  const tip = { x: n.tailX - n.x, y: n.tailY - n.y };
+  // The SVG is position:absolute inside the bubble div, so its coordinate origin
+  // is the padding-box top-left (= inner edge of the 3px border), not the outer corner.
+  // Convert all geometry to SVG coords by subtracting the border width.
+  const bord = 3; // must match CSS border-width on .bubble-node
+  const cx  = n.w / 2 - bord;
+  const cy  = n.h / 2 - bord;
+  const bl  = { x: -bord,        y: -bord        }; // outer top-left in SVG coords
+  const br  = { x: n.w - bord,   y: n.h - bord   }; // outer bottom-right in SVG coords
+  const tip = { x: n.tailX - n.x - bord, y: n.tailY - n.y - bord };
   const r   = Math.min(14, n.w / 2, n.h / 2);
 
   // Exact intersection of center→tip ray with the rounded border + tangent there
@@ -695,10 +698,10 @@ function renderBubbleTail(n) {
 
   // Size the SVG viewport to exactly cover all drawn elements (no reliance on overflow:visible)
   const pad = 10;
-  const vbMinX = Math.min(0, n.w, tip.x, p1.x, p2.x) - pad;
-  const vbMinY = Math.min(0, n.h, tip.y, p1.y, p2.y) - pad;
-  const vbMaxX = Math.max(0, n.w, tip.x, p1.x, p2.x) + pad;
-  const vbMaxY = Math.max(0, n.h, tip.y, p1.y, p2.y) + pad;
+  const vbMinX = Math.min(bl.x, br.x, tip.x, p1.x, p2.x) - pad;
+  const vbMinY = Math.min(bl.y, br.y, tip.y, p1.y, p2.y) - pad;
+  const vbMaxX = Math.max(bl.x, br.x, tip.x, p1.x, p2.x) + pad;
+  const vbMaxY = Math.max(bl.y, br.y, tip.y, p1.y, p2.y) + pad;
   svg.style.left   = vbMinX + 'px';
   svg.style.top    = vbMinY + 'px';
   svg.style.width  = (vbMaxX - vbMinX) + 'px';

@@ -9603,3 +9603,84 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
 ✻ Churned for 1m 2s
 ```
+
+```
+❯ Bubbleの尻尾とBubble本体の接続部分の描画を改善したいです。尻尾がBubbleの左側もしくは上側にあるときは問題ありませんが、右側もしくは下側にあるときは尻尾
+とBubbleの間に少し隙間があります。尻尾がBubbleの右もしくは下にあるときも、左もしくは上のときと同じように、隙間のできないようにしてください
+
+  Searched for 6 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Now I understand the issue. The SVG is position: absolute inside the bubble div, so its coordinate origin is at the inner edge of the 3px border (the
+  padding box). The geometry (bl/br = (0,0) to (n.w, n.h)) treats (0,0) as the bubble's outer corner — not the SVG origin.
+
+  This causes a 3px offset:
+  - Left/top: hit point at SVG x=0 (inner border edge) → the border stroke covers the join → looks fine
+  - Right/bottom: hit point at SVG x=n.w (3px outside the outer border) → gap visible
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 13 lines, removed 10 lines
+      670    }
+      671    while (svg.firstChild) svg.removeChild(svg.firstChild);
+      672
+      673 -  // All coordinates in canvas pixels, relative to bubble div's top-left corner
+      674 -  const cx  = n.w / 2;
+      675 -  const cy  = n.h / 2;
+      676 -  const bl  = { x: 0,   y: 0   };
+      677 -  const br  = { x: n.w, y: n.h };
+      678 -  const tip = { x: n.tailX - n.x, y: n.tailY - n.y };
+      673 +  // The SVG is position:absolute inside the bubble div, so its coordinate origin
+      674 +  // is the padding-box top-left (= inner edge of the 3px border), not the outer corner.
+      675 +  // Convert all geometry to SVG coords by subtracting the border width.
+      676 +  const bord = 3; // must match CSS border-width on .bubble-node
+      677 +  const cx  = n.w / 2 - bord;
+      678 +  const cy  = n.h / 2 - bord;
+      679 +  const bl  = { x: -bord,        y: -bord        }; // outer top-left in SVG coords
+      680 +  const br  = { x: n.w - bord,   y: n.h - bord   }; // outer bottom-right in SVG coords
+      681 +  const tip = { x: n.tailX - n.x - bord, y: n.tailY - n.y - bord };
+      682    const r   = Math.min(14, n.w / 2, n.h / 2);
+      683
+      684    // Exact intersection of center→tip ray with the rounded border + tangent there
+     ...
+      698
+      699    // Size the SVG viewport to exactly cover all drawn elements (no reliance on overflow:visible)
+      700    const pad = 10;
+      698 -  const vbMinX = Math.min(0, n.w, tip.x, p1.x, p2.x) - pad;
+      699 -  const vbMinY = Math.min(0, n.h, tip.y, p1.y, p2.y) - pad;
+      700 -  const vbMaxX = Math.max(0, n.w, tip.x, p1.x, p2.x) + pad;
+      701 -  const vbMaxY = Math.max(0, n.h, tip.y, p1.y, p2.y) + pad;
+      701 +  const vbMinX = Math.min(bl.x, br.x, tip.x, p1.x, p2.x) - pad;
+      702 +  const vbMinY = Math.min(bl.y, br.y, tip.y, p1.y, p2.y) - pad;
+      703 +  const vbMaxX = Math.max(bl.x, br.x, tip.x, p1.x, p2.x) + pad;
+      704 +  const vbMaxY = Math.max(bl.y, br.y, tip.y, p1.y, p2.y) + pad;
+      705    svg.style.left   = vbMinX + 'px';
+      706    svg.style.top    = vbMinY + 'px';
+      707    svg.style.width  = (vbMaxX - vbMinX) + 'px';
+
+⏺ Now let me verify the change looks correct:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Let me also check if there are tests for this function:
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ Bash(npm test 2>&1 | tail -30)
+  ⎿  > test
+     > vitest run
+     … +10 lines (ctrl+o to expand)
+
+⏺ All tests pass. The fix is clean and correct.
+
+  Root cause: The SVG is position: absolute inside the bubble div, which places its coordinate origin at the padding-box top-left — i.e., 3px inside the
+  outer border edge. The geometry was computing hit points relative to the bubble's outer corner (bl=(0,0), br=(n.w,n.h)), creating a 3px mismatch.
+
+  - Left/top side: hit point at SVG x=0/y=0 (inner border edge) → the border stroke sits on top and covers the seam → looked fine
+  - Right/bottom side: hit point at SVG x=n.w/y=n.h → 3px beyond the outer border → visible gap
+
+  Fix: Subtract the 3px border width from all geometry coordinates so they're expressed in true SVG coordinate space (outer border at bl=(-3,-3),
+  br=(n.w-3, n.h-3)). The tail path now connects flush at the outer border edge on all four sides.
+
+✻ Cogitated for 3m 58s
+```
