@@ -9684,3 +9684,52 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
 ✻ Cogitated for 3m 58s
 ```
+
+```
+❯ Bubbleにhoverしてヘッダーを表示した場合、ヘッダーともとのBubbleの上部の間に、もとのBubbleの角の丸みが残って見えます。ヘッダーを表示しているときも、左
+右の辺がまっすぐに見えるようにしたいです。ヘッダーをもう少し下に(Bubbleに重ねて)表示するとよいかもしれませんが、別のいい方法があれば提案してください
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 現在の実装を確認しました。問題の原因は明確です：
+
+  - .bubble-header は bottom: calc(100% - 3px) でバブルの上に浮いている
+  - バブル本体は border-radius: 14px が全コーナーに適用されたまま
+  - ヘッダー表示時も上辺の丸みが残り、ヘッダーの直線的な側面との間に「隙間」が見える
+
+  提案する解決策: ホバー時にバブル本体の上辺の角丸を 0 にする（CSSのみ、JS変更なし）。transition: border-radius 0.15s をつけてヘッダーの opacity
+  フェードと揃えれば自然に見えます。
+
+⏺ Update(canvas.css)
+  ⎿  Added 1 line
+      461    border-radius: 14px;
+      462    min-width: 120px; min-height: 60px;
+      463    opacity: 0.8;
+      464 +  transition: border-top-left-radius 0.15s, border-top-right-radius 0.15s;
+      465  }
+      466  .bubble-node.selected {
+      467    border-color: var(--bn-border-sel, #56d364);
+
+⏺ Update(canvas.css)
+  ⎿  Added 5 lines
+      491  .bubble-node.is-editing .bubble-header {
+      492    opacity: 1; pointer-events: auto;
+      493  }
+      494 +.bubble-node:hover,
+      495 +.bubble-node.is-editing {
+      496 +  border-top-left-radius: 0;
+      497 +  border-top-right-radius: 0;
+      498 +}
+      499  .bubble-node.drag-released .bubble-header {
+      500    opacity: 0 !important; pointer-events: none !important;
+      501  }
+
+⏺ これで：
+
+  - ホバー時にバブルの上辺2コーナーが角丸0になり、ヘッダーの側面と直線で繋がる
+  - transition: 0.15s でヘッダーの opacity フェードインと同期してなめらかに変化
+  - ホバーを外すと border-radius: 14px に戻る
+  - JS変更なし・CSSのみの修正
+
+✻ Baked for 48s
+```

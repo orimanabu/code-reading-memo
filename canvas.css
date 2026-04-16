@@ -461,6 +461,7 @@ body.link-mode .node:hover {
   border-radius: 14px;
   min-width: 120px; min-height: 60px;
   opacity: 0.8;
+  transition: border-top-left-radius 0.15s, border-top-right-radius 0.15s;
 }
 .bubble-node.selected {
   border-color: var(--bn-border-sel, #56d364);
@@ -489,6 +490,11 @@ body.link-mode .node:hover {
 .bubble-node:hover .bubble-header,
 .bubble-node.is-editing .bubble-header {
   opacity: 1; pointer-events: auto;
+}
+.bubble-node:hover,
+.bubble-node.is-editing {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 .bubble-node.drag-released .bubble-header {
   opacity: 0 !important; pointer-events: none !important;
