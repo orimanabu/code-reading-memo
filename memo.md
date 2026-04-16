@@ -9538,3 +9538,68 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
 ⏺ test: add missing zoom control elements to DOM setup fixture
 ```
+
+```
+❯ block内の "mq_ops->timeout" という文字列をリンク元にできますか
+
+⏺ 現在のリンク作成フローを確認します。
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ 現在の仕組みを確認します。injectAnchor でリンクテキストのマッチング処理を見ます。
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ 現在の仕組みを確認しました。できますが、バグがあります。
+
+  mq_ops->timeout を選択してリンクを作成すると、矢印は描画されますが、コードブロック内のアンカーハイライトが表示されません。
+
+  原因: injectAnchor はリンクテキスト mq_ops->timeout で HTML を検索しますが、highlight.js は > を &gt; にエスケープするため、mq_ops-&gt;timeout として
+  HTML に存在し、マッチしません。
+
+  修正します：
+
+⏺ Update(canvas.js)
+  ⎿  Added 6 lines, removed 3 lines
+      78    { id: 'pink',   label: 'Pink',   hex: '#f778ba', hexLight: '#ff9ed2', bgDark: '#29091b', bgMid: '#360d24', borderMid: '#6a2050', title
+          Bg: 'rgba(247,120,186,0.15)', glow28: 'rgba(247,120,186,0.28)', glow42: 'rgba(247,120,186,0.42)' },
+      79  ];
+      80
+      81 -// Replace first occurrence of `rawText` in HTML string, only inside text nodes (outside tags)
+      81 +// Replace first occurrence of `rawText` in HTML string, only inside text nodes (outside tags).
+      82 +// rawText is plain text; inside HTML it appears HTML-escaped (e.g. `>` → `&gt;`), so we must
+      83 +// escape before building the regex pattern and use the escaped form in the replacement too.
+      84  function injectAnchor(html, rawText, linkId) {
+      83 -  const pat = rawText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      85 +  const escapedText = esc(rawText);
+      86 +  const pat = escapedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      87    const re  = new RegExp(pat, 'g');
+      88    // split on HTML tags
+      89    const parts = html.split(/(<[^>]*>)/);
+      90    return parts.map((p, i) => {
+      91      if (i % 2 === 1) return p; // tag → pass through
+      92      return p.replace(re, () =>
+      90 -      `<span class="link-anchor" data-lid="${linkId}">${esc(rawText)}</span>`
+      93 +      `<span class="link-anchor" data-lid="${linkId}">${escapedText}</span>`
+      94      );
+      95    }).join('');
+      96  }
+
+⏺ テストを実行して確認します。
+
+⏺ Bash(npm test 2>&1 | tail -30)
+  ⎿  > test
+     > vitest run
+     … +10 lines (ctrl+o to expand)
+
+⏺ 全テスト通過です。
+
+  ---
+  まとめ
+
+  - mq_ops->timeout をマウスで選択 → ツールチップが表示 → リンクを作成できます
+  - 修正前: -> の > が HTML で &gt; にエスケープされるためアンカーハイライトが表示されなかった
+  - 修正後: injectAnchor でも HTML エスケープ後の文字列でマッチするため、コードブロック内のアンカーハイライトが正しく表示されます
+
+✻ Churned for 1m 2s
+```
