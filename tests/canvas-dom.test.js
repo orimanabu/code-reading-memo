@@ -129,6 +129,11 @@ describe('addBubble', () => {
     expect(el).not.toBeNull();
     expect(el.classList.contains('bubble-node')).toBe(true);
   });
+
+  it('defaults showTail to true', () => {
+    const n = addBubble(0, 0);
+    expect(n.showTail).toBe(true);
+  });
 });
 
 // ─── loadState ─────────────────────────────────────────
@@ -188,5 +193,18 @@ describe('loadState', () => {
     const el = document.getElementById('nd-20');
     expect(el).not.toBeNull();
     expect(el.classList.contains('bubble-node')).toBe(true);
+  });
+
+  it('restores showTail field for bubble nodes', () => {
+    loadState({
+      nodes: [
+        { id: 21, type: 'bubble', x: 0, y: 0, w: 200, h: 80,
+          text: 'no tail', tailX: 50, tailY: 50, showTail: false },
+      ],
+      links: [],
+      nid: 22,
+      lid: 1,
+    });
+    expect(S.nodes[0].showTail).toBe(false);
   });
 });

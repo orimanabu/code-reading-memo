@@ -64,6 +64,18 @@ describe('Save/Restore round-trip', () => {
     expect(r.tailY).toBe(300);
   });
 
+  it('restores showTail=false for bubble nodes', () => {
+    const b = addBubble(50, 60);
+    b.showTail = false;
+    b.text = 'Hidden tail';
+
+    saveState();
+    loadState({ nodes: [], links: [] });
+    restoreFromStorage();
+
+    expect(S.nodes[0].showTail).toBe(false);
+  });
+
   it('restores links connecting nodes', () => {
     const a = addNode(0,   0,   'foo()');
     const b = addNode(500, 0,   'bar()');

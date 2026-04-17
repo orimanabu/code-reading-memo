@@ -10313,3 +10313,185 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
 ✻ Brewed for 2m 52s
 ```
+
+```
+❯ テストケースやREADMEを、実装に合わせて必要に応じて更新してください
+
+  Searched for 2 patterns, read 3 files (ctrl+o to expand)
+
+⏺ Now let me check the current canvas.js for recent features like link styles and bubble header:
+
+  Searched for 4 patterns, read 2 files (ctrl+o to expand)
+
+⏺ Let me run the tests first to see current state:
+
+⏺ Bash(npm test 2>&1 | tail -50)
+  ⎿  > test
+     > vitest run
+     … +10 lines (ctrl+o to expand)
+
+⏺ All tests pass. Now let me identify what needs updating. The recent commits added:
+  1. showTail field for bubbles (serialized but missing from README tables and sample JSON)
+  2. Link style controls (color, width, dash) - runtime only, worth documenting in Features
+  3. Bubble tail toggle checkbox
+
+  Let me update both READMEs and add tests for showTail:
+
+⏺ Update(README.md)
+  ⎿  Added 2 lines, removed 1 line
+      10
+      11  - **Code blocks**: Place code inside resizable rectangles. Each block can have a title and file path.
+      12  - **Syntax highlighting**: Language is auto-detected from the code content and highlighted accordingly.
+      13 -- **Links**: Select a string (e.g. a function name) inside a code block and connect it to another block with an arrow. Click to jump to
+         -the target.
+      13 +- **Links**: Select a string (e.g. a function name) inside a code block and connect it to another block with an arrow. Click to jump to
+         +the target. Right-click a link to change its color, width, and dash style.
+      14 +- **Bubbles**: Add comment bubbles with a movable tail. The tail can be shown or hidden via the bubble header checkbox.
+      15  - **Infinite canvas**: Miro-style navigation (drag to pan, Cmd+drag to zoom, v/h to switch modes).
+      16  - **Save / Load**: Export and import as JSON.
+      17
+
+⏺ Update(README.md)
+  ⎿  Added 1 line
+      90  | `tailX` | number | X coordinate of the tail tip on the canvas (movable independently of the body) |
+      91  | `tailY` | number | Y coordinate of the tail tip on the canvas (movable independently of the body) |
+      92  | `color` | string | Color theme ID (e.g. `"green"`, `"blue"`, `"red"`) |
+      93 +| `showTail` | boolean | Whether to show the tail (default: `true`) |
+      94
+      95  ## Node object (frame)
+      96
+
+⏺ Now update the JSON sample to include showTail:
+
+⏺ Update(README.md)
+  ⎿  Added 2 lines, removed 1 line
+      168        "text": "Namespaces are initialized here",
+      169        "tailX": 250.0,
+      170        "tailY": 220.0,
+      171 -      "color": "green"
+      171 +      "color": "green",
+      172 +      "showTail": true
+      173      },
+      174      {
+      175        "id": 3,
+
+⏺ Now update README.ja.md:
+
+⏺ Update(README.ja.md)
+  ⎿  Added 2 lines, removed 1 line
+      10
+      11  - **コードブロック**: リサイズ可能な矩形の中にコードを配置できます。各ブロックにタイトルとファイルパスを設定できます。
+      12  - **シンタックスハイライト**: コードの内容から言語を自動検出し、適切にハイライト表示します。
+      13 -- **リンク**: コードブロック内の文字列（関数名など）を選択し、別のブロックへ矢印で接続できます。クリックするとジャンプ先へ移動します。
+      13 +- **リンク**: コードブロック内の文字列（関数名など）を選択し、別のブロックへ矢印で接続できます。クリックするとジャンプ先へ移動します。右
+         +クリックでリンクの色・太さ・破線スタイルを変更できます。
+      14 +- **吹き出し**: 移動可能な尾部を持つコメント吹き出しを追加できます。吹き出しヘッダーのチェックボックスで尾部の表示・非表示を切り替えられ
+         +ます。
+      15  - **無限キャンバス**: Miro風のナビゲーション（ドラッグでパン、Cmd+ドラッグでズーム、v/hでモード切替）。
+      16  - **保存 / 読み込み**: JSONとしてエクスポート・インポートできます。
+      17
+
+⏺ Update(README.ja.md)
+  ⎿  Added 1 line
+      90  | `tailX` | number | キャンバス上の尾部先端のX座標（本体とは独立して移動可能） |
+      91  | `tailY` | number | キャンバス上の尾部先端のY座標（本体とは独立して移動可能） |
+      92  | `color` | string | カラーテーマID（例：`"green"`、`"blue"`、`"red"`） |
+      93 +| `showTail` | boolean | 尾部を表示するかどうか（デフォルト：`true`） |
+      94
+      95  ## Nodeオブジェクト（フレーム）
+      96
+
+⏺ Update(README.ja.md)
+  ⎿  Added 2 lines, removed 1 line
+      168        "text": "Namespaces are initialized here",
+      169        "tailX": 250.0,
+      170        "tailY": 220.0,
+      171 -      "color": "green"
+      171 +      "color": "green",
+      172 +      "showTail": true
+      173      },
+      174      {
+      175        "id": 3,
+
+⏺ Now add test cases for showTail. I'll add them to the integration test (save/restore) and the DOM test (addBubble):
+
+⏺ Update(tests/canvas-integration.test.js)
+  ⎿  Added 12 lines
+      64      expect(r.tailY).toBe(300);
+      65    });
+      66
+      67 +  it('restores showTail=false for bubble nodes', () => {
+      68 +    const b = addBubble(50, 60);
+      69 +    b.showTail = false;
+      70 +    b.text = 'Hidden tail';
+      71 +
+      72 +    saveState();
+      73 +    loadState({ nodes: [], links: [] });
+      74 +    restoreFromStorage();
+      75 +
+      76 +    expect(S.nodes[0].showTail).toBe(false);
+      77 +  });
+      78 +
+      79    it('restores links connecting nodes', () => {
+      80      const a = addNode(0,   0,   'foo()');
+      81      const b = addNode(500, 0,   'bar()');
+
+⏺ Now add a test to canvas-dom.test.js for showTail default in addBubble and for loadState with showTail:
+
+⏺ Update(tests/canvas-dom.test.js)
+  ⎿  Added 5 lines
+      129      expect(el).not.toBeNull();
+      130      expect(el.classList.contains('bubble-node')).toBe(true);
+      131    });
+      132 +
+      133 +  it('defaults showTail to true', () => {
+      134 +    const n = addBubble(0, 0);
+      135 +    expect(n.showTail).toBe(true);
+      136 +  });
+      137  });
+      138
+      139  // ─── loadState ─────────────────────────────────────────
+
+⏺ Also add a loadState test for showTail in canvas-dom.test.js:
+
+⏺ Update(tests/canvas-dom.test.js)
+  ⎿  Added 13 lines
+      194      expect(el).not.toBeNull();
+      195      expect(el.classList.contains('bubble-node')).toBe(true);
+      196    });
+      197 +
+      198 +  it('restores showTail field for bubble nodes', () => {
+      199 +    loadState({
+      200 +      nodes: [
+      201 +        { id: 21, type: 'bubble', x: 0, y: 0, w: 200, h: 80,
+      202 +          text: 'no tail', tailX: 50, tailY: 50, showTail: false },
+      203 +      ],
+      204 +      links: [],
+      205 +      nid: 22,
+      206 +      lid: 1,
+      207 +    });
+      208 +    expect(S.nodes[0].showTail).toBe(false);
+      209 +  });
+      210  });
+
+⏺ Bash(npm test 2>&1 | tail -20)
+  ⎿  > test
+     > vitest run
+     … +10 lines (ctrl+o to expand)
+
+⏺ All 42 tests pass. Here's a summary of the changes made:
+
+  README.md / README.ja.md:
+  - Features section: added link style controls (color, width, dash via right-click) and bubble tail toggle
+  - Bubble node table: added showTail field (boolean, default true)
+  - JSON sample: added "showTail": true to the bubble node example
+
+  tests/canvas-dom.test.js (2 new tests):
+  - addBubble — defaults showTail to true
+  - loadState — restores showTail: false for bubble nodes
+
+  tests/canvas-integration.test.js (1 new test):
+  - Save/Restore — showTail: false round-trips correctly through saveState/restoreFromStorage
+
+✻ Brewed for 2m 22s
+```

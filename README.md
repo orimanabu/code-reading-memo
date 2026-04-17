@@ -10,7 +10,8 @@ A browser-based tool for reading and understanding source code. Visually organiz
 
 - **Code blocks**: Place code inside resizable rectangles. Each block can have a title and file path.
 - **Syntax highlighting**: Language is auto-detected from the code content and highlighted accordingly.
-- **Links**: Select a string (e.g. a function name) inside a code block and connect it to another block with an arrow. Click to jump to the target.
+- **Links**: Select a string (e.g. a function name) inside a code block and connect it to another block with an arrow. Click to jump to the target. Right-click a link to change its color, width, and dash style.
+- **Bubbles**: Add comment bubbles with a movable tail. The tail can be shown or hidden via the bubble header checkbox.
 - **Infinite canvas**: Miro-style navigation (drag to pan, Cmd+drag to zoom, v/h to switch modes).
 - **Save / Load**: Export and import as JSON.
 
@@ -89,6 +90,7 @@ A node is a bubble when `type` is `"bubble"`.
 | `tailX` | number | X coordinate of the tail tip on the canvas (movable independently of the body) |
 | `tailY` | number | Y coordinate of the tail tip on the canvas (movable independently of the body) |
 | `color` | string | Color theme ID (e.g. `"green"`, `"blue"`, `"red"`) |
+| `showTail` | boolean | Whether to show the tail (default: `true`) |
 
 ## Node object (frame)
 
@@ -166,7 +168,8 @@ Specify either `branch` or `tag`, but not both. If both are omitted, `commitHash
       "text": "Namespaces are initialized here",
       "tailX": 250.0,
       "tailY": 220.0,
-      "color": "green"
+      "color": "green",
+      "showTail": true
     },
     {
       "id": 3,
