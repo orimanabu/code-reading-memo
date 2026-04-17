@@ -9868,3 +9868,35 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
 ✻ Worked for 1m 10s
 ```
+
+```
+❯ Block, Bubble, Frameをリサイズする際、各辺付近にマウスを持っていくとマウスカーソルがリサイズ用の形状に変わってドラッグできるようになりますが、マウスカ
+ーソルの形状が変わる位置が、Block/Bubble/Frameの枠線の内側に見えます。リサイズできる位置を枠線の中央付近にしてください
+
+  Searched for 4 patterns, read 1 file (ctrl+o to expand)
+
+⏺ ノードの .node は 2px、.bubble-node は 3px、.frame-node は 1px のボーダーがあります。現在のリサイズエッジ (6px幅) は top/bottom/left/right: 0
+  でボーダーの内側から始まっています。-3px にシフトして枠線の中央付近に来るよう修正します。
+
+⏺ Update(canvas.css)
+  ⎿  Added 4 lines, removed 4 lines
+      226  .resize-edge {
+      227    position: absolute; z-index: 11;
+      228  }
+      229 -.resize-edge-n { top: 0;    left: 8px;  right: 8px;  height: 6px; cursor: ns-resize; }
+      230 -.resize-edge-s { bottom: 0; left: 8px;  right: 24px; height: 6px; cursor: ns-resize; }
+      231 -.resize-edge-e { right: 0;  top: 8px;   bottom: 24px; width: 6px; cursor: ew-resize; }
+      232 -.resize-edge-w { left: 0;   top: 8px;   bottom: 8px;  width: 6px; cursor: ew-resize; }
+      229 +.resize-edge-n { top: -3px;    left: 8px;  right: 8px;  height: 6px; cursor: ns-resize; }
+      230 +.resize-edge-s { bottom: -3px; left: 8px;  right: 24px; height: 6px; cursor: ns-resize; }
+      231 +.resize-edge-e { right: -3px;  top: 8px;   bottom: 24px; width: 6px; cursor: ew-resize; }
+      232 +.resize-edge-w { left: -3px;   top: 8px;   bottom: 8px;  width: 6px; cursor: ew-resize; }
+      233  .resize-handle::after {
+      234    content: '';
+      235    position: absolute; bottom: 5px; right: 5px;
+
+⏺ 各辺の resize-edge を -3px にシフトしました。これにより 6px のリサイズゾーンが枠線の中央（内側 3px・外側 3px）に配置されます。canvas.html
+  をブラウザで開いて確認してください。
+
+✻ Churned for 57s
+```
