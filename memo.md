@@ -12160,3 +12160,71 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
 ✻ Brewed for 12m 2s
 ```
+
+```
+❯ JSONデータにExportする際、リンクのスタイルが保存されていないように見えます。確認お願いします
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ バグを特定しました。saveState() の line 2530 でリンクをシリアライズする際に、スタイルプロパティ (stroke, strokeWidth, dash) が除外されています。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      2527        const { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color } = n;
+      2528        return { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color };
+      2529      }),
+      2530 -    links: S.links.map(({ id, fromId, text, toId }) => ({ id, fromId, text, toId })),
+      2530 +    links: S.links.map(({ id, fromId, text, toId, stroke, strokeWidth, dash }) => ({ id, fromId, text, toId, stroke, strokeWidth, dash
+           + })),
+      2531      freeLines: S.freeLines.map(({ id, points, lineStyle, stroke, strokeWidth, dash }) => ({
+      2532        id, points: points.map(p => ({ x: p.x, y: p.y })), lineStyle, stroke, strokeWidth, dash,
+      2533      })),
+
+⏺ 修正しました。
+
+  原因: saveState() (line 2530) でリンクを保存する際、{ id, fromId, text, toId } の4フィールドしか含めておらず、stroke・strokeWidth・dash
+  が脱落していました。freeLines は同じファイル内で正しく保存されていたのに対し、links だけ抜けていた形です。
+
+  修正内容: デストラクチャリングと出力オブジェクトに stroke, strokeWidth, dash を追加しました。
+
+❯ JSONデータ保存に関して、他に保存し忘れがないか確認してください
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 各ノードタイプのデータ構造を確認します。
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ 次に loadState でちゃんと読み込まれているか確認します。
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ 全体を整理してチェックしました。結果は以下の通りです。
+
+  各型のフィールド対応表
+
+  ┌──────────────────┬────────────────────────────────────────────────────────────────┬───────────────────────────┬────────────────────────┬────────┐
+  │        型        │                       作成時のフィールド                       │         saveState         │       loadState        │  問題  │
+  ├──────────────────┼────────────────────────────────────────────────────────────────┼───────────────────────────┼────────────────────────┼────────┤
+  │ code node        │ id, x, y, w, h, code, lang, title, filePath, showLineNumbers,  │ 全部含む                  │ 全部含む               │ なし   │
+  │                  │ lineNumberStart, color                                         │                           │                        │        │
+  ├──────────────────┼────────────────────────────────────────────────────────────────┼───────────────────────────┼────────────────────────┼────────┤
+  │ bubble node      │ id, type, x, y, w, h, text, tailX, tailY, color, showTail      │ 全部含む                  │ 全部含む               │ なし   │
+  ├──────────────────┼────────────────────────────────────────────────────────────────┼───────────────────────────┼────────────────────────┼────────┤
+  │ frame node       │ id, type, x, y, w, h, label, color                             │ 全部含む                  │ 全部含む               │ なし   │
+  ├──────────────────┼────────────────────────────────────────────────────────────────┼───────────────────────────┼────────────────────────┼────────┤
+  │ link             │ id, fromId, text, toId, stroke, strokeWidth, dash              │ 今回修正済                │ data.links             │ 修正済 │
+  │                  │                                                                │                           │ をそのまま代入 ✓       │        │
+  ├──────────────────┼────────────────────────────────────────────────────────────────┼───────────────────────────┼────────────────────────┼────────┤
+  │ freeLine         │ id, points, lineStyle, stroke, strokeWidth, dash               │ 全部含む                  │ 全部含む               │ なし   │
+  ├──────────────────┼────────────────────────────────────────────────────────────────┼───────────────────────────┼────────────────────────┼────────┤
+  │ viewport /       │ スプレッド展開で保存                                           │ { ...S.vp }, {            │ 全部含む               │ なし   │
+  │ gitConfig        │                                                                │ ...S.gitConfig }          │                        │        │
+  └──────────────────┴────────────────────────────────────────────────────────────────┴───────────────────────────┴────────────────────────┴────────┘
+
+  今回修正したリンクのスタイルフィールド以外に保存漏れはありませんでした。
+
+✻ Brewed for 39s
+```

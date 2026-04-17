@@ -2527,7 +2527,7 @@ function saveState() {
       const { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color } = n;
       return { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color };
     }),
-    links: S.links.map(({ id, fromId, text, toId }) => ({ id, fromId, text, toId })),
+    links: S.links.map(({ id, fromId, text, toId, stroke, strokeWidth, dash }) => ({ id, fromId, text, toId, stroke, strokeWidth, dash })),
     freeLines: S.freeLines.map(({ id, points, lineStyle, stroke, strokeWidth, dash }) => ({
       id, points: points.map(p => ({ x: p.x, y: p.y })), lineStyle, stroke, strokeWidth, dash,
     })),
