@@ -238,7 +238,7 @@ const S = {
   clipboard: [],    // copied items: node or freeline snapshots (tagged with _clipType)
   pending: null,    // { fromId, text }
   gitConfig: { url: '', branch: '', tag: '', commitHash: '' },
-  tailDrag: null,   // { id } — bubble tail being dragged
+  tailDrag: null,   // { id, otailX, otailY } — bubble tail being dragged
   marquee: null,    // { sx, sy, ex, ey } — rubber-band selection in screen coords
   freeLines: [],    // standalone line objects
   flid: 1,          // next free-line id
@@ -247,6 +247,7 @@ const S = {
   selLine: null,    // selected free-line id
   lineDrag: null,   // { id, sx, sy, origPoints } — line being dragged
   ptDrag: null,     // { lineId, ptIndex, sx, sy, origPt } — single point being dragged
+  undoStack: [],    // undo history (up to 10 snapshots)
 };
 
 // ═══════════════════════════════════════════════════════
@@ -395,6 +396,7 @@ function applyNodeColor(n, el) {
 function ndEl(id) { return document.getElementById('nd-' + id); }
 
 function addNode(x, y, code) {
+  pushUndo();
   const n = {
     id: S.nid++, x, y, w: 430, h: 270,
     code: code ?? '',
@@ -412,7 +414,9 @@ function addNode(x, y, code) {
   renderNode(n, el);
   renderLinks();
   selectNode(n.id);
+  _suppressUndo = true;
   startEdit(n.id);
+  _suppressUndo = false;
   scheduleSave();
   return n;
 }
@@ -573,6 +577,7 @@ function renderNode(n, el) {
   if (rh) {
     rh.addEventListener('mousedown', e => {
       e.stopPropagation(); e.preventDefault();
+      pushUndo();
       S.resize = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, ow: n.w, oh: n.h, edge: 'se' };
     });
   }
@@ -586,6 +591,7 @@ function setupEdgeResizeHandles(n, el) {
     h.className = `resize-edge resize-edge-${edge}`;
     h.addEventListener('mousedown', e => {
       e.stopPropagation(); e.preventDefault();
+      pushUndo();
       S.resize = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, ow: n.w, oh: n.h, edge };
     });
     el.appendChild(h);
@@ -761,7 +767,8 @@ function renderBubbleTail(n) {
   });
   handle.addEventListener('mousedown', e => {
     e.stopPropagation(); e.preventDefault();
-    S.tailDrag = { id: n.id };
+    pushUndo();
+    S.tailDrag = { id: n.id, otailX: n.tailX, otailY: n.tailY };
   });
   g.appendChild(handle);
 
@@ -769,6 +776,7 @@ function renderBubbleTail(n) {
 }
 
 function addBubble(x, y) {
+  pushUndo();
   const n = {
     id: S.nid++, type: 'bubble',
     x, y, w: 200, h: 100,
@@ -786,7 +794,9 @@ function addBubble(x, y) {
   renderNode(n, el);
   renderLinks();
   selectNode(n.id);
+  _suppressUndo = true;
   startEdit(n.id);
+  _suppressUndo = false;
   scheduleSave();
   return n;
 }
@@ -890,6 +900,7 @@ function setupFrameEvents(n, el) {
           const mn = S.nodes.find(nn => nn.id === id);
           if (mn) multiOrigins.set(id, { ox: mn.x, oy: mn.y, otailX: mn.tailX, otailY: mn.tailY });
         });
+        pushUndo();
         S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, multiOrigins };
         allIds.forEach(id => ndEl(id)?.classList.add('dragging'));
       }
@@ -899,6 +910,7 @@ function setupFrameEvents(n, el) {
     selectNode(n.id);
     if (onHeader) {
       e.preventDefault();
+      pushUndo();
       S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y };
       el.classList.add('dragging');
     }
@@ -912,6 +924,7 @@ function setupFrameEvents(n, el) {
 }
 
 function addFrame(x, y, w, h, label, color) {
+  pushUndo();
   const n = {
     id: S.nid++, type: 'frame',
     x, y, w, h,
@@ -1042,6 +1055,7 @@ function setupNodeEvents(n, el) {
           if (mn) multiOrigins.set(id, { ox: mn.x, oy: mn.y,
             otailX: mn.tailX, otailY: mn.tailY });
         });
+        pushUndo();
         S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, multiOrigins };
         allIds.forEach(id => ndEl(id)?.classList.add('dragging'));
       }
@@ -1055,6 +1069,7 @@ function setupNodeEvents(n, el) {
     // drag from header
     if (onHeader) {
       e.preventDefault();
+      pushUndo();
       S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y,
                  otailX: n.tailX, otailY: n.tailY };
       el.classList.add('dragging');
@@ -1069,6 +1084,7 @@ function setupNodeEvents(n, el) {
 function startEdit(id) {
   if (S.editing === id) return;
   if (S.editing) stopEdit();
+  pushUndo();
   S.editing = id;
   renderNode(S.nodes.find(n => n.id === id));
 }
@@ -1151,6 +1167,7 @@ function clearMultiSel() {
 }
 
 function removeNode(id) {
+  pushUndo();
   // Collect source nodes whose link-anchor spans must be cleared
   const affectedFromIds = S.links
     .filter(l => l.toId === id)
@@ -1246,18 +1263,21 @@ function copyNodes() {
 }
 
 function cutNodes() {
+  pushUndo();
   const items = [];
   const ids = getSelectedIds();
   for (const id of ids) {
     const n = S.nodes.find(nn => nn.id === id);
     if (n) items.push({ _clipType: 'node', ...n });
   }
+  _suppressUndo = true;
   ids.forEach(id => removeNode(id));
   if (S.selLine !== null) {
     const line = S.freeLines.find(l => l.id === S.selLine);
     if (line) items.push({ _clipType: 'freeline', ...line, points: line.points.map(p => ({ ...p })) });
     removeFreeLine(S.selLine);
   }
+  _suppressUndo = false;
   if (items.length === 0) return;
   S.clipboard = items;
   setStatus(`${S.clipboard.length} object(s) cut (Cmd/Ctrl+V to paste)`);
@@ -1265,6 +1285,7 @@ function cutNodes() {
 
 function pasteNodes() {
   if (S.clipboard.length === 0) return;
+  pushUndo();
   clearMultiSel();
   selectNode(null);
   const offset = 30;
@@ -1376,6 +1397,7 @@ function createLink(fromId, text, toId) {
     setStatus(`⚠ A link from "${text}" to this block already exists`);
     return;
   }
+  pushUndo();
   S.links.push({ id: S.lid++, fromId, text, toId, stroke: '#388bfd', strokeWidth: 1.5, dash: '' });
   renderNode(S.nodes.find(n => n.id === fromId));
   renderLinks();
@@ -1383,6 +1405,7 @@ function createLink(fromId, text, toId) {
 }
 
 function removeLink(id) {
+  pushUndo();
   const lnk = S.links.find(l => l.id === id);
   S.links = S.links.filter(l => l.id !== id);
   if (lnk) renderNode(S.nodes.find(n => n.id === lnk.fromId));
@@ -1686,6 +1709,7 @@ function renderFreeLines() {
       if (e.button !== 0 || S.lineDrawMode) return;
       e.stopPropagation();
       selectFreeLine(line.id);
+      pushUndo();
       S.lineDrag = {
         id: line.id,
         sx: e.clientX, sy: e.clientY,
@@ -1709,6 +1733,7 @@ function renderFreeLines() {
         circ.addEventListener('mousedown', e => {
           if (e.button !== 0 || S.lineDrawMode) return;
           e.stopPropagation();
+          pushUndo();
           S.ptDrag = { lineId: line.id, ptIndex: i, sx: e.clientX, sy: e.clientY, origPt: { ...p } };
         });
         g.appendChild(circ);
@@ -1770,6 +1795,7 @@ function selectFreeLine(id) {
 }
 
 function addFreeLine(points, lineStyle, stroke, strokeWidth, dash) {
+  pushUndo();
   const line = {
     id: S.flid++,
     points: points.map(p => ({ x: p.x, y: p.y })),
@@ -1786,6 +1812,7 @@ function addFreeLine(points, lineStyle, stroke, strokeWidth, dash) {
 }
 
 function removeFreeLine(id) {
+  pushUndo();
   S.freeLines = S.freeLines.filter(l => l.id !== id);
   if (S.selLine === id) S.selLine = null;
   renderFreeLines();
@@ -2241,7 +2268,11 @@ document.addEventListener('mouseup', () => {
       }
     }
   }
-  if (S.tailDrag) { S.tailDrag = null; scheduleSave(); }
+  if (S.tailDrag) {
+    const _tdn = S.nodes.find(n => n.id === S.tailDrag.id);
+    if (_tdn && _tdn.tailX === S.tailDrag.otailX && _tdn.tailY === S.tailDrag.otailY) S.undoStack.pop();
+    S.tailDrag = null; scheduleSave();
+  }
   if (S.marquee) {
     marqueeEl.style.display = 'none';
     const mq = S.marquee;
@@ -2264,8 +2295,40 @@ document.addEventListener('mouseup', () => {
       setStatus(count > 0 ? `${count} block(s) selected — drag header to move all` : 'Ready — double-click to add block | select text to create link | right-click link to delete');
     }
   }
-  if (S.ptDrag) { S.ptDrag = null; scheduleSave(); }
-  if (S.lineDrag) { S.lineDrag = null; scheduleSave(); }
+  if (S.ptDrag) {
+    const _pdl = S.freeLines.find(l => l.id === S.ptDrag.lineId);
+    if (_pdl) {
+      const _pdp = _pdl.points[S.ptDrag.ptIndex];
+      if (_pdp && _pdp.x === S.ptDrag.origPt.x && _pdp.y === S.ptDrag.origPt.y) S.undoStack.pop();
+    }
+    S.ptDrag = null; scheduleSave();
+  }
+  if (S.lineDrag) {
+    const _ldl = S.freeLines.find(l => l.id === S.lineDrag.id);
+    if (_ldl && _ldl.points.length > 0 &&
+        _ldl.points[0].x === S.lineDrag.origPoints[0].x &&
+        _ldl.points[0].y === S.lineDrag.origPoints[0].y) S.undoStack.pop();
+    S.lineDrag = null; scheduleSave();
+  }
+  // Discard undo entry if drag/resize caused no actual movement
+  if (S.drag) {
+    if (S.drag.multiOrigins) {
+      let _moved = false;
+      S.drag.multiOrigins.forEach((orig, id) => {
+        const _mn = S.nodes.find(n => n.id === id);
+        if (_mn && (_mn.x !== orig.ox || _mn.y !== orig.oy)) _moved = true;
+      });
+      if (!_moved) S.undoStack.pop();
+    } else {
+      const _dn = S.nodes.find(n => n.id === S.drag.id);
+      if (_dn && _dn.x === S.drag.ox && _dn.y === S.drag.oy) S.undoStack.pop();
+    }
+  }
+  if (S.resize) {
+    const _rn = S.nodes.find(n => n.id === S.resize.id);
+    if (_rn && _rn.x === S.resize.ox && _rn.y === S.resize.oy &&
+        _rn.w === S.resize.ow && _rn.h === S.resize.oh) S.undoStack.pop();
+  }
   S.drag = null; S.resize = null; S.zoomDrag = null;
   if (S.pan) S.pan = null;
   updateCursor();
@@ -2312,7 +2375,10 @@ document.addEventListener('keydown', e => {
   if ((e.code === 'Delete' || e.code === 'Backspace') && !isInput && !S.editing) {
     if (S.multiSel.size > 0) {
       e.preventDefault();
+      pushUndo();
+      _suppressUndo = true;
       [...S.multiSel].forEach(id => removeNode(id));
+      _suppressUndo = false;
     } else if (S.sel) {
       e.preventDefault();
       removeNode(S.sel);
@@ -2337,6 +2403,9 @@ document.addEventListener('keydown', e => {
     } else if (e.key === 'v') {
       e.preventDefault();
       pasteNodes();
+    } else if (e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      undo();
     }
   }
   // Ctrl/Cmd + 0: reset zoom
@@ -2372,6 +2441,61 @@ document.getElementById('btn-add-line')?.addEventListener('click', () => {
 // UTILS
 // ═══════════════════════════════════════════════════════
 function setStatus(msg) { statusEl.textContent = msg; }
+
+// ═══════════════════════════════════════════════════════
+// UNDO
+// ═══════════════════════════════════════════════════════
+let _suppressUndo = false;
+
+function snapshotForUndo() {
+  return {
+    nodes: S.nodes.map(n => ({ ...n })),
+    links: S.links.map(l => ({ ...l })),
+    freeLines: S.freeLines.map(l => ({ ...l, points: l.points.map(p => ({ ...p })) })),
+    nid: S.nid, lid: S.lid, flid: S.flid,
+  };
+}
+
+function pushUndo() {
+  if (_suppressUndo) return;
+  S.undoStack.push(snapshotForUndo());
+  if (S.undoStack.length > 10) S.undoStack.shift();
+}
+
+function undo() {
+  if (S.undoStack.length === 0) { setStatus('Nothing to undo'); return; }
+  const snap = S.undoStack.pop();
+  // Stop any active edit without pushing another undo entry
+  S.editing = null;
+  // Clear DOM
+  S.nodes.forEach(n => ndEl(n.id)?.remove());
+  svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+  const _ull = document.getElementById('free-lines-layer');
+  if (_ull) while (_ull.firstChild) _ull.removeChild(_ull.firstChild);
+  // Restore state
+  S.sel = null; S.selLine = null; S.multiSel.clear();
+  S.nid = snap.nid; S.lid = snap.lid; S.flid = snap.flid;
+  S.nodes = [];
+  S.links = snap.links.map(l => ({ ...l }));
+  S.freeLines = snap.freeLines.map(l => ({ ...l, points: l.points.map(p => ({ ...p })) }));
+  for (const nd of snap.nodes) {
+    const n = { ...nd };
+    S.nodes.push(n);
+    const el = document.createElement('div');
+    el.className = n.type === 'frame' ? 'frame-node'
+                 : 'node' + (n.type === 'bubble' ? ' bubble-node' : '');
+    el.id = 'nd-' + n.id;
+    canvas.appendChild(el);
+    if (n.type === 'frame') setupFrameEvents(n, el);
+    else setupNodeEvents(n, el);
+    renderNode(n, el);
+  }
+  renderLinks();
+  renderFreeLines();
+  scheduleSave();
+  const remaining = S.undoStack.length;
+  setStatus(remaining > 0 ? `Undo — ${remaining} more step(s) available` : 'Undo — no more steps');
+}
 
 // ═══════════════════════════════════════════════════════
 // PERSISTENCE
@@ -2816,6 +2940,7 @@ document.getElementById('btn-git-config').addEventListener('click', openDialog);
 
       const n = S.nodes.find(n => n.id === targetNodeId);
       if (!n) { setNote('⚠ Node not found.', 'err'); okBtn.disabled = false; return; }
+      pushUndo();
       n.code            = code;
       n.filePath        = filePath;
       n.lineNumberStart = startLine;
@@ -3354,5 +3479,6 @@ if (typeof globalThis !== 'undefined' && typeof process !== 'undefined') {
     saveState, restoreFromStorage,
     createLink, removeLink,
     copyNodes, cutNodes, pasteNodes, toggleMultiSel,
-    addFreeLine, removeFreeLine };
+    addFreeLine, removeFreeLine,
+    pushUndo, undo };
 }

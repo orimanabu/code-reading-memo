@@ -11603,3 +11603,560 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
 ✻ Sautéed for 1m 58s
 ```
+
+```
+❯ Undoを実装することはできますでしょうか。直近10個くらいの操作を巻き戻せるようにしたいです
+
+  Searched for 8 patterns, read 2 files (ctrl+o to expand)
+
+⏺ Now I have a complete picture. Let me implement undo with a snapshot-based approach (up to 10 steps). I'll push undo snapshots before each mutating
+  operation.
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      238    clipboard: [],    // copied items: node or freeline snapshots (tagged with _clipType)
+      239    pending: null,    // { fromId, text }
+      240    gitConfig: { url: '', branch: '', tag: '', commitHash: '' },
+      241 -  tailDrag: null,   // { id } — bubble tail being dragged
+      241 +  tailDrag: null,   // { id, otailX, otailY } — bubble tail being dragged
+      242    marquee: null,    // { sx, sy, ex, ey } — rubber-band selection in screen coords
+      243    freeLines: [],    // standalone line objects
+      244    flid: 1,          // next free-line id
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      247    selLine: null,    // selected free-line id
+      248    lineDrag: null,   // { id, sx, sy, origPoints } — line being dragged
+      249    ptDrag: null,     // { lineId, ptIndex, sx, sy, origPt } — single point being dragged
+      250 +  undoStack: [],    // undo history (up to 10 snapshots)
+      251  };
+      252
+      253  // ═══════════════════════════════════════════════════════
+
+⏺ Now add the undo functions in the PERSISTENCE section:
+
+⏺ Update(canvas.js)
+  ⎿  Added 55 lines
+      2375  function setStatus(msg) { statusEl.textContent = msg; }
+      2376
+      2377  // ═══════════════════════════════════════════════════════
+      2378 +// UNDO
+      2379 +// ═══════════════════════════════════════════════════════
+      2380 +let _suppressUndo = false;
+      2381 +
+      2382 +function snapshotForUndo() {
+      2383 +  return {
+      2384 +    nodes: S.nodes.map(n => ({ ...n })),
+      2385 +    links: S.links.map(l => ({ ...l })),
+      2386 +    freeLines: S.freeLines.map(l => ({ ...l, points: l.points.map(p => ({ ...p })) })),
+      2387 +    nid: S.nid, lid: S.lid, flid: S.flid,
+      2388 +  };
+      2389 +}
+      2390 +
+      2391 +function pushUndo() {
+      2392 +  if (_suppressUndo) return;
+      2393 +  S.undoStack.push(snapshotForUndo());
+      2394 +  if (S.undoStack.length > 10) S.undoStack.shift();
+      2395 +}
+      2396 +
+      2397 +function undo() {
+      2398 +  if (S.undoStack.length === 0) { setStatus('Nothing to undo'); return; }
+      2399 +  const snap = S.undoStack.pop();
+      2400 +  // Stop any active edit without pushing another undo entry
+      2401 +  S.editing = null;
+      2402 +  // Clear DOM
+      2403 +  S.nodes.forEach(n => ndEl(n.id)?.remove());
+      2404 +  svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+      2405 +  const _ull = document.getElementById('free-lines-layer');
+      2406 +  if (_ull) while (_ull.firstChild) _ull.removeChild(_ull.firstChild);
+      2407 +  // Restore state
+      2408 +  S.sel = null; S.selLine = null; S.multiSel.clear();
+      2409 +  S.nid = snap.nid; S.lid = snap.lid; S.flid = snap.flid;
+      2410 +  S.nodes = [];
+      2411 +  S.links = snap.links.map(l => ({ ...l }));
+      2412 +  S.freeLines = snap.freeLines.map(l => ({ ...l, points: l.points.map(p => ({ ...p })) }));
+      2413 +  for (const nd of snap.nodes) {
+      2414 +    const n = { ...nd };
+      2415 +    S.nodes.push(n);
+      2416 +    const el = document.createElement('div');
+      2417 +    el.className = n.type === 'frame' ? 'frame-node'
+      2418 +                 : 'node' + (n.type === 'bubble' ? ' bubble-node' : '');
+      2419 +    el.id = 'nd-' + n.id;
+      2420 +    canvas.appendChild(el);
+      2421 +    if (n.type === 'frame') setupFrameEvents(n, el);
+      2422 +    else setupNodeEvents(n, el);
+      2423 +    renderNode(n, el);
+      2424 +  }
+      2425 +  renderLinks();
+      2426 +  renderFreeLines();
+      2427 +  scheduleSave();
+      2428 +  const remaining = S.undoStack.length;
+      2429 +  setStatus(remaining > 0 ? `Undo — ${remaining} more step(s) available` : 'Undo — no more steps');
+      2430 +}
+      2431 +
+      2432 +// ═══════════════════════════════════════════════════════
+      2433  // PERSISTENCE
+      2434  // ═══════════════════════════════════════════════════════
+      2435  const STORAGE_KEY = 'code-canvas-v1';
+
+⏺ Now modify addNode to push undo and suppress it for the internal startEdit call:
+
+⏺ Update(canvas.js)
+  ⎿  Added 3 lines
+      396  function ndEl(id) { return document.getElementById('nd-' + id); }
+      397
+      398  function addNode(x, y, code) {
+      399 +  pushUndo();
+      400    const n = {
+      401      id: S.nid++, x, y, w: 430, h: 270,
+      402      code: code ?? '',
+     ...
+      414    renderNode(n, el);
+      415    renderLinks();
+      416    selectNode(n.id);
+      417 +  _suppressUndo = true;
+      418    startEdit(n.id);
+      419 +  _suppressUndo = false;
+      420    scheduleSave();
+      421    return n;
+      422  }
+
+⏺ Now modify startEdit to push undo:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1073  function startEdit(id) {
+      1074    if (S.editing === id) return;
+      1075    if (S.editing) stopEdit();
+      1076 +  pushUndo();
+      1077    S.editing = id;
+      1078    renderNode(S.nodes.find(n => n.id === id));
+      1079  }
+
+⏺ Now modify removeNode to push undo:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1156  }
+      1157
+      1158  function removeNode(id) {
+      1159 +  pushUndo();
+      1160    // Collect source nodes whose link-anchor spans must be cleared
+      1161    const affectedFromIds = S.links
+      1162      .filter(l => l.toId === id)
+
+⏺ Modify addBubble to push undo and suppress startEdit:
+
+⏺ Update(canvas.js)
+  ⎿  Added 3 lines
+      773  }
+      774
+      775  function addBubble(x, y) {
+      776 +  pushUndo();
+      777    const n = {
+      778      id: S.nid++, type: 'bubble',
+      779      x, y, w: 200, h: 100,
+     ...
+      791    renderNode(n, el);
+      792    renderLinks();
+      793    selectNode(n.id);
+      794 +  _suppressUndo = true;
+      795    startEdit(n.id);
+      796 +  _suppressUndo = false;
+      797    scheduleSave();
+      798    return n;
+      799  }
+
+⏺ Modify addFrame to push undo:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      919  }
+      920
+      921  function addFrame(x, y, w, h, label, color) {
+      922 +  pushUndo();
+      923    const n = {
+      924      id: S.nid++, type: 'frame',
+      925      x, y, w, h,
+
+⏺ Modify createLink to push undo (after duplicate check):
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1386      setStatus(`⚠ A link from "${text}" to this block already exists`);
+      1387      return;
+      1388    }
+      1389 +  pushUndo();
+      1390    S.links.push({ id: S.lid++, fromId, text, toId, stroke: '#388bfd', strokeWidth: 1.5, dash: '' });
+      1391    renderNode(S.nodes.find(n => n.id === fromId));
+      1392    renderLinks();
+
+⏺ Modify removeLink to push undo:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1394  }
+      1395
+      1396  function removeLink(id) {
+      1397 +  pushUndo();
+      1398    const lnk = S.links.find(l => l.id === id);
+      1399    S.links = S.links.filter(l => l.id !== id);
+      1400    if (lnk) renderNode(S.nodes.find(n => n.id === lnk.fromId));
+
+⏺ Modify addFreeLine to push undo:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1782  }
+      1783
+      1784  function addFreeLine(points, lineStyle, stroke, strokeWidth, dash) {
+      1785 +  pushUndo();
+      1786    const line = {
+      1787      id: S.flid++,
+      1788      points: points.map(p => ({ x: p.x, y: p.y })),
+
+⏺ Modify removeFreeLine to push undo:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1799  }
+      1800
+      1801  function removeFreeLine(id) {
+      1802 +  pushUndo();
+      1803    S.freeLines = S.freeLines.filter(l => l.id !== id);
+      1804    if (S.selLine === id) S.selLine = null;
+      1805    renderFreeLines();
+
+⏺ Modify cutNodes to push undo once and suppress individual calls:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 3 lines
+      1256  }
+      1257
+      1258  function cutNodes() {
+      1259 +  pushUndo();
+      1260    const items = [];
+      1261    const ids = getSelectedIds();
+      1262    for (const id of ids) {
+      1263      const n = S.nodes.find(nn => nn.id === id);
+      1264      if (n) items.push({ _clipType: 'node', ...n });
+      1265    }
+      1266 +  _suppressUndo = true;
+      1267    ids.forEach(id => removeNode(id));
+      1268    if (S.selLine !== null) {
+      1269      const line = S.freeLines.find(l => l.id === S.selLine);
+      1270      if (line) items.push({ _clipType: 'freeline', ...line, points: line.points.map(p => ({ ...p })) });
+      1271      removeFreeLine(S.selLine);
+      1272    }
+      1273 +  _suppressUndo = false;
+      1274    if (items.length === 0) return;
+      1275    S.clipboard = items;
+      1276    setStatus(`${S.clipboard.length} object(s) cut (Cmd/Ctrl+V to paste)`);
+
+⏺ Modify pasteNodes to push undo:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1278
+      1279  function pasteNodes() {
+      1280    if (S.clipboard.length === 0) return;
+      1281 +  pushUndo();
+      1282    clearMultiSel();
+      1283    selectNode(null);
+      1284    const offset = 30;
+
+⏺ Now modify the resize handle mousedowns to push undo. First the se-corner handle:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      577    if (rh) {
+      578      rh.addEventListener('mousedown', e => {
+      579        e.stopPropagation(); e.preventDefault();
+      580 +      pushUndo();
+      581        S.resize = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, ow: n.w, oh: n.h, edge: 'se' };
+      582      });
+      583    }
+
+⏺ Now the edge resize handles:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      591      h.className = `resize-edge resize-edge-${edge}`;
+      592      h.addEventListener('mousedown', e => {
+      593        e.stopPropagation(); e.preventDefault();
+      594 +      pushUndo();
+      595        S.resize = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, ow: n.w, oh: n.h, edge };
+      596      });
+      597      el.appendChild(h);
+
+⏺ Now modify setupNodeEvents drag starts (single and multi):
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines
+      1052            if (mn) multiOrigins.set(id, { ox: mn.x, oy: mn.y,
+      1053              otailX: mn.tailX, otailY: mn.tailY });
+      1054          });
+      1055 +        pushUndo();
+      1056          S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, multiOrigins };
+      1057          allIds.forEach(id => ndEl(id)?.classList.add('dragging'));
+      1058        }
+     ...
+      1066      // drag from header
+      1067      if (onHeader) {
+      1068        e.preventDefault();
+      1069 +      pushUndo();
+      1070        S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y,
+      1071                   otailX: n.tailX, otailY: n.tailY };
+      1072        el.classList.add('dragging');
+
+⏺ Now modify setupFrameEvents drag starts:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines
+      899            const mn = S.nodes.find(nn => nn.id === id);
+      900            if (mn) multiOrigins.set(id, { ox: mn.x, oy: mn.y, otailX: mn.tailX, otailY: mn.tailY });
+      901          });
+      902 +        pushUndo();
+      903          S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, multiOrigins };
+      904          allIds.forEach(id => ndEl(id)?.classList.add('dragging'));
+      905        }
+     ...
+      909      selectNode(n.id);
+      910      if (onHeader) {
+      911        e.preventDefault();
+      912 +      pushUndo();
+      913        S.drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y };
+      914        el.classList.add('dragging');
+      915      }
+
+⏺ Modify the bubble tail handle mousedown to push undo and store original tail position:
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 1 line
+      767    });
+      768    handle.addEventListener('mousedown', e => {
+      769      e.stopPropagation(); e.preventDefault();
+      770 -    S.tailDrag = { id: n.id };
+      770 +    pushUndo();
+      771 +    S.tailDrag = { id: n.id, otailX: n.tailX, otailY: n.tailY };
+      772    });
+      773    g.appendChild(handle);
+      774
+
+⏺ Modify the free line drag (fl-hit mousedown) to push undo:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1709        if (e.button !== 0 || S.lineDrawMode) return;
+      1710        e.stopPropagation();
+      1711        selectFreeLine(line.id);
+      1712 +      pushUndo();
+      1713        S.lineDrag = {
+      1714          id: line.id,
+      1715          sx: e.clientX, sy: e.clientY,
+
+⏺ Modify the point drag mousedown to push undo:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1733          circ.addEventListener('mousedown', e => {
+      1734            if (e.button !== 0 || S.lineDrawMode) return;
+      1735            e.stopPropagation();
+      1736 +          pushUndo();
+      1737            S.ptDrag = { lineId: line.id, ptIndex: i, sx: e.clientX, sy: e.clientY, origPt: { ...p } };
+      1738          });
+      1739          g.appendChild(circ);
+
+⏺ Now modify the keyboard Del handler to push undo once for multi-select deletions:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Good - I see the UNDO section was placed after UTILS, but setStatus is defined in UTILS which is after the undo code. However, since these are all in
+  the same script, the UNDO functions are all called at runtime (not at parse time), so they will have access to setStatus. This is fine.
+
+  Now let me find the keyboard Del handler to add the undo suppression for multiSel:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 6 lines
+      2339    if ((e.code === 'Delete' || e.code === 'Backspace') && !isInput && !S.editing) {
+      2340      if (S.multiSel.size > 0) {
+      2341        e.preventDefault();
+      2342 +      pushUndo();
+      2343 +      _suppressUndo = true;
+      2344        [...S.multiSel].forEach(id => removeNode(id));
+      2345 +      _suppressUndo = false;
+      2346      } else if (S.sel) {
+      2347        e.preventDefault();
+      2348        removeNode(S.sel);
+     ...
+      2367      } else if (e.key === 'v') {
+      2368        e.preventDefault();
+      2369        pasteNodes();
+      2370 +    } else if (e.key === 'z' && !e.shiftKey) {
+      2371 +      e.preventDefault();
+      2372 +      undo();
+      2373      }
+      2374    }
+      2375    // Ctrl/Cmd + 0: reset zoom
+
+⏺ Now modify the main mouseup handler to discard undo if no movement happened. Let me find it:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 5 lines, removed 1 line
+      2268        }
+      2269      }
+      2270    }
+      2271 -  if (S.tailDrag) { S.tailDrag = null; scheduleSave(); }
+      2271 +  if (S.tailDrag) {
+      2272 +    const _tdn = S.nodes.find(n => n.id === S.tailDrag.id);
+      2273 +    if (_tdn && _tdn.tailX === S.tailDrag.otailX && _tdn.tailY === S.tailDrag.otailY) S.undoStack.pop();
+      2274 +    S.tailDrag = null; scheduleSave();
+      2275 +  }
+      2276    if (S.marquee) {
+      2277      marqueeEl.style.display = 'none';
+      2278      const mq = S.marquee;
+
+⏺ Update(canvas.js)
+  ⎿  Added 34 lines, removed 2 lines
+      2295        setStatus(count > 0 ? `${count} block(s) selected — drag header to move all` : 'Ready — double-click to add block | select text
+            to create link | right-click link to delete');
+      2296      }
+      2297    }
+      2298 -  if (S.ptDrag) { S.ptDrag = null; scheduleSave(); }
+      2299 -  if (S.lineDrag) { S.lineDrag = null; scheduleSave(); }
+      2298 +  if (S.ptDrag) {
+      2299 +    const _pdl = S.freeLines.find(l => l.id === S.ptDrag.lineId);
+      2300 +    if (_pdl) {
+      2301 +      const _pdp = _pdl.points[S.ptDrag.ptIndex];
+      2302 +      if (_pdp && _pdp.x === S.ptDrag.origPt.x && _pdp.y === S.ptDrag.origPt.y) S.undoStack.pop();
+      2303 +    }
+      2304 +    S.ptDrag = null; scheduleSave();
+      2305 +  }
+      2306 +  if (S.lineDrag) {
+      2307 +    const _ldl = S.freeLines.find(l => l.id === S.lineDrag.id);
+      2308 +    if (_ldl && _ldl.points.length > 0 &&
+      2309 +        _ldl.points[0].x === S.lineDrag.origPoints[0].x &&
+      2310 +        _ldl.points[0].y === S.lineDrag.origPoints[0].y) S.undoStack.pop();
+      2311 +    S.lineDrag = null; scheduleSave();
+      2312 +  }
+      2313 +  // Discard undo entry if drag/resize caused no actual movement
+      2314 +  if (S.drag) {
+      2315 +    if (S.drag.multiOrigins) {
+      2316 +      let _moved = false;
+      2317 +      S.drag.multiOrigins.forEach((orig, id) => {
+      2318 +        const _mn = S.nodes.find(n => n.id === id);
+      2319 +        if (_mn && (_mn.x !== orig.ox || _mn.y !== orig.oy)) _moved = true;
+      2320 +      });
+      2321 +      if (!_moved) S.undoStack.pop();
+      2322 +    } else {
+      2323 +      const _dn = S.nodes.find(n => n.id === S.drag.id);
+      2324 +      if (_dn && _dn.x === S.drag.ox && _dn.y === S.drag.oy) S.undoStack.pop();
+      2325 +    }
+      2326 +  }
+      2327 +  if (S.resize) {
+      2328 +    const _rn = S.nodes.find(n => n.id === S.resize.id);
+      2329 +    if (_rn && _rn.x === S.resize.ox && _rn.y === S.resize.oy &&
+      2330 +        _rn.w === S.resize.ow && _rn.h === S.resize.oh) S.undoStack.pop();
+      2331 +  }
+      2332    S.drag = null; S.resize = null; S.zoomDrag = null;
+      2333    if (S.pan) S.pan = null;
+      2334    updateCursor();
+
+⏺ Now add pushUndo to the git fetch dialog OK handler. Let me find it:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      2940
+      2941        const n = S.nodes.find(n => n.id === targetNodeId);
+      2942        if (!n) { setNote('⚠ Node not found.', 'err'); okBtn.disabled = false; return; }
+      2943 +      pushUndo();
+      2944        n.code            = code;
+      2945        n.filePath        = filePath;
+      2946        n.lineNumberStart = startLine;
+
+⏺ Now I need to update the TEST EXPORTS at the bottom to include pushUndo and undo:
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 1 line
+      3479      saveState, restoreFromStorage,
+      3480      createLink, removeLink,
+      3481      copyNodes, cutNodes, pasteNodes, toggleMultiSel,
+      3482 -    addFreeLine, removeFreeLine };
+      3482 +    addFreeLine, removeFreeLine,
+      3483 +    pushUndo, undo };
+      3484  }
+
+⏺ Now let me verify the UNDO section is placed correctly (it uses setStatus which is defined in UTILS section that comes after PERSISTENCE). Since these
+  are runtime calls (not parse-time), this is fine. But let me also check that undo() uses the correct variable names for DOM elements:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Wait, I see there are two UNDO sections in the file. Let me check:
+
+  Searched for 5 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Now let me run the existing tests to make sure nothing is broken:
+
+⏺ Bash(npm test 2>&1 | tail -50)
+  ⎿  > test
+     > vitest run
+     … +10 lines (ctrl+o to expand)
+
+⏺ All 42 tests pass. Let me also update the help dialog in canvas.html to show the new Cmd+Z shortcut, and check if there's a shortcuts section there:
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.html)
+  ⎿  Added 1 line
+      213          <tr><td>Double-click canvas</td><td>Add block</td></tr>
+      214          <tr><th>Selection</th><td></td></tr>
+      215          <tr><td><kbd>Shift</kbd> + click</td><td>Multi-select</td></tr>
+      216 +        <tr><td><kbd>Cmd</kbd> / <kbd>Ctrl</kbd> + <kbd>Z</kbd></td><td>Undo (up to 10 steps)</td></tr>
+      217          <tr><td><kbd>Cmd</kbd> / <kbd>Ctrl</kbd> + <kbd>C</kbd></td><td>Copy node(s)</td></tr>
+      218          <tr><td><kbd>Cmd</kbd> / <kbd>Ctrl</kbd> + <kbd>X</kbd></td><td>Cut node(s)</td></tr>
+      219          <tr><td><kbd>Cmd</kbd> / <kbd>Ctrl</kbd> + <kbd>V</kbd></td><td>Paste node(s)</td></tr>
+
+⏺ Bash(npm test 2>&1 | tail -10)
+  ⎿   RUN  v2.1.9 /Users/ori/devel/src/github.com/orimanabu/code-canvas
+
+      ✓ tests/canvas-dom.test.js (21 tests) 519ms
+     … +6 lines (ctrl+o to expand)
+
+⏺ All 42 tests pass. Here's a summary of what was implemented:
+
+  Undo implementation (Cmd/Ctrl+Z)
+
+  Architecture: Snapshot-based undo — takes a deep copy of {nodes, links, freeLines, nid, lid, flid} before each mutating operation, capped at 10 steps.
+
+  Operations covered:
+  - Add/delete code block, bubble, frame
+  - Add/delete free-form line
+  - Create/delete link
+  - Edit node content (captured when entering edit mode)
+  - Cut/paste nodes (each as a single undo step)
+  - Drag node/frame to move (discards undo entry if no movement occurred)
+  - Resize node (discards if unchanged)
+  - Drag bubble tail (discards if unchanged)
+  - Drag/edit free line vertices (discards if unchanged)
+  - Git snippet fetch
+
+  Compound operations (cutNodes, multi-node Delete): use _suppressUndo flag so one undo step undoes the whole batch.
+
+  Edit mode: Cmd+Z while a textarea is focused performs native browser text undo. Cmd+Z outside edit mode performs canvas undo.
+
+  Shortcut: Cmd+Z (Mac) / Ctrl+Z (Windows/Linux), listed in the help dialog.
+
+✻ Brewed for 12m 2s
+```
