@@ -3,8 +3,8 @@
   "nodes": [
     {
       "id": 2,
-      "x": 159,
-      "y": 157,
+      "x": 937.4862119752399,
+      "y": 142.1998819016114,
       "w": 650,
       "h": 490.50283600511244,
       "code": "static void virtblk_done(struct virtqueue *vq)\n{\n\tstruct virtio_blk *vblk = vq->vdev->priv;\n\tbool req_done = false;\n\tint qid = vq->index;\n\tstruct virtblk_req *vbr;\n\tunsigned long flags;\n\tunsigned int len;\n\n\tspin_lock_irqsave(&vblk->vqs[qid].lock, flags);\n\tdo {\n\t\tvirtqueue_disable_cb(vq);\n\t\twhile ((vbr = virtqueue_get_buf(vblk->vqs[qid].vq, &len)) != NULL) {\n\t\t\tstruct request *req = blk_mq_rq_from_pdu(vbr);\n\n\t\t\tif (likely(!blk_should_fake_timeout(req->q)))\n\t\t\t\tblk_mq_complete_request(req);\n\t\t\treq_done = true;\n\t\t}\n\t} while (!virtqueue_enable_cb(vq));\n\n\t/* In case queue is stopped waiting for more buffers. */\n\tif (req_done)\n\t\tblk_mq_start_stopped_hw_queues(vblk->disk->queue, true);\n\tspin_unlock_irqrestore(&vblk->vqs[qid].lock, flags);\n}",
@@ -17,8 +17,8 @@
     },
     {
       "id": 3,
-      "x": 869,
-      "y": 457.5,
+      "x": 1647.48621197524,
+      "y": 442.69988190161143,
       "w": 562,
       "h": 189,
       "code": "static inline bool blk_should_fake_timeout(struct request_queue *q)\n{\n\tif (IS_ENABLED(CONFIG_FAIL_IO_TIMEOUT) &&\n\t test_bit(QUEUE_FLAG_FAIL_IO, &q->queue_flags))\n\t\treturn __blk_should_fake_timeout(q);\n\treturn false;\n}",
@@ -31,8 +31,8 @@
     },
     {
       "id": 4,
-      "x": 1577,
-      "y": 566,
+      "x": 2355.4862119752397,
+      "y": 551.1998819016114,
       "w": 560,
       "h": 238.1257090012781,
       "code": "config FAIL_IO_TIMEOUT\n\tbool \"Fault-injection capability for faking disk interrupts\"\n\tdepends on FAULT_INJECTION && BLOCK\n\thelp\n\t Provide fault-injection capability on end IO handling. This\n\t will make the block layer \"forget\" an interrupt as configured,\n\t thus exercising the error handling.\n\n\t Only works with drivers that use the generic timeout handling,\n\t for others it won't do anything.",
@@ -45,8 +45,8 @@
     },
     {
       "id": 5,
-      "x": -396,
-      "y": 405,
+      "x": 382.48621197523994,
+      "y": 390.19988190161143,
       "w": 430,
       "h": 204,
       "code": "static const struct blk_mq_ops virtio_mq_ops = {\n\t.queue_rq\t= virtio_queue_rq,\n\t.queue_rqs\t= virtio_queue_rqs,\n\t.commit_rqs\t= virtio_commit_rqs,\n\t.complete\t= virtblk_request_done,\n\t.map_queues\t= virtblk_map_queues,\n\t.poll\t\t= virtblk_poll,\n};",
@@ -59,8 +59,8 @@
     },
     {
       "id": 6,
-      "x": -1132,
-      "y": -211.5,
+      "x": -353.51378802476006,
+      "y": -226.3001180983886,
       "w": 620,
       "h": 1974.2941892733254,
       "code": "struct blk_mq_ops {\n\t/**\n\t * @queue_rq: Queue a new request from block IO.\n\t */\n\tblk_status_t (*queue_rq)(struct blk_mq_hw_ctx *,\n\t\t\t\t const struct blk_mq_queue_data *);\n\n\t/**\n\t * @commit_rqs: If a driver uses bd->last to judge when to submit\n\t * requests to hardware, it must define this function. In case of errors\n\t * that make us stop issuing further requests, this hook serves the\n\t * purpose of kicking the hardware (which the last request otherwise\n\t * would have done).\n\t */\n\tvoid (*commit_rqs)(struct blk_mq_hw_ctx *);\n\n\t/**\n\t * @queue_rqs: Queue a list of new requests. Driver is guaranteed\n\t * that each request belongs to the same queue. If the driver doesn't\n\t * empty the @rqlist completely, then the rest will be queued\n\t * individually by the block layer upon return.\n\t */\n\tvoid (*queue_rqs)(struct request **rqlist);\n\n\t/**\n\t * @get_budget: Reserve budget before queue request, once .queue_rq is\n\t * run, it is driver's responsibility to release the\n\t * reserved budget. Also we have to handle failure case\n\t * of .get_budget for avoiding I/O deadlock.\n\t */\n\tint (*get_budget)(struct request_queue *);\n\n\t/**\n\t * @put_budget: Release the reserved budget.\n\t */\n\tvoid (*put_budget)(struct request_queue *, int);\n\n\t/**\n\t * @set_rq_budget_token: store rq's budget token\n\t */\n\tvoid (*set_rq_budget_token)(struct request *, int);\n\t/**\n\t * @get_rq_budget_token: retrieve rq's budget token\n\t */\n\tint (*get_rq_budget_token)(struct request *);\n\n\t/**\n\t * @timeout: Called on request timeout.\n\t */\n\tenum blk_eh_timer_return (*timeout)(struct request *);\n\n\t/**\n\t * @poll: Called to poll for completion of a specific tag.\n\t */\n\tint (*poll)(struct blk_mq_hw_ctx *, struct io_comp_batch *);\n\n\t/**\n\t * @complete: Mark the request as complete.\n\t */\n\tvoid (*complete)(struct request *);\n\n\t/**\n\t * @init_hctx: Called when the block layer side of a hardware queue has\n\t * been set up, allowing the driver to allocate/init matching\n\t * structures.\n\t */\n\tint (*init_hctx)(struct blk_mq_hw_ctx *, void *, unsigned int);\n\t/**\n\t * @exit_hctx: Ditto for exit/teardown.\n\t */\n\tvoid (*exit_hctx)(struct blk_mq_hw_ctx *, unsigned int);\n\n\t/**\n\t * @init_request: Called for every command allocated by the block layer\n\t * to allow the driver to set up driver specific data.\n\t *\n\t * Tag greater than or equal to queue_depth is for setting up\n\t * flush request.\n\t */\n\tint (*init_request)(struct blk_mq_tag_set *set, struct request *,\n\t\t\t unsigned int, unsigned int);\n\t/**\n\t * @exit_request: Ditto for exit/teardown.\n\t */\n\tvoid (*exit_request)(struct blk_mq_tag_set *set, struct request *,\n\t\t\t unsigned int);\n\n\t/**\n\t * @cleanup_rq: Called before freeing one request which isn't completed\n\t * yet, and usually for freeing the driver private data.\n\t */\n\tvoid (*cleanup_rq)(struct request *);\n\n\t/**\n\t * @busy: If set, returns whether or not this queue currently is busy.\n\t */\n\tbool (*busy)(struct request_queue *);\n\n\t/**\n\t * @map_queues: This allows drivers specify their own queue mapping by\n\t * overriding the setup-time function that builds the mq_map.\n\t */\n\tvoid (*map_queues)(struct blk_mq_tag_set *set);\n\n#ifdef CONFIG_BLK_DEBUG_FS\n\t/**\n\t * @show_rq: Used by the debugfs implementation to show driver-specific\n\t * information about a request.\n\t */\n\tvoid (*show_rq)(struct seq_file *m, struct request *rq);\n#endif\n\n\tRH_KABI_RESERVE(1)\n\tRH_KABI_RESERVE(2)\n\tRH_KABI_RESERVE(3)\n\tRH_KABI_RESERVE(4)\n\tRH_KABI_RESERVE(5)\n\tRH_KABI_RESERVE(6)\n\tRH_KABI_RESERVE(7)\n\tRH_KABI_RESERVE(8)\n};",
@@ -74,68 +74,73 @@
     {
       "id": 7,
       "type": "bubble",
-      "x": -1372.1571362515976,
-      "y": 435.3199445134201,
+      "x": -593.6709242763577,
+      "y": 420.51982641503156,
       "w": 206.18856350191717,
       "h": 100,
       "text": "タイムアウト処理は基本的にこのメソッドが呼ばれる",
-      "tailX": -1082.1571362515976,
-      "tailY": 629.3199445134201,
-      "color": "green"
+      "tailX": -303.6709242763577,
+      "tailY": 614.5198264150315,
+      "color": "green",
+      "showTail": true
     },
     {
       "id": 8,
       "type": "bubble",
-      "x": -345.5517337652766,
-      "y": 174.98500875199255,
+      "x": 432.93447820996334,
+      "y": 160.18489065360396,
       "w": 387.61169875730616,
       "h": 83.26837125863455,
       "text": "virtio_blkのblk_mq_opsには.timeoutは定義されていない",
-      "tailX": -156.5517337652765,
-      "tailY": 464.9850087519926,
-      "color": "green"
+      "tailX": 621.9344782099635,
+      "tailY": 450.18489065360404,
+      "color": "green",
+      "showTail": true
     },
     {
       "id": 9,
       "type": "bubble",
-      "x": 826,
-      "y": 74.53426325543195,
+      "x": 1604.48621197524,
+      "y": 59.73414515704336,
       "w": 358.53426325543194,
       "h": 82.96857274968048,
       "text": "virtio_blkでtimeoutでgrepするとここしか出てこない",
-      "tailX": 558,
-      "tailY": 457.53426325543194,
-      "color": "green"
+      "tailX": 1336.48621197524,
+      "tailY": 442.7341451570434,
+      "color": "green",
+      "showTail": true
     },
     {
       "id": 10,
       "type": "bubble",
-      "x": 1796.4971639948876,
-      "y": 427.06285450063905,
+      "x": 2574.983375970128,
+      "y": 412.2627364022505,
       "w": 207.2199907522367,
       "h": 100,
       "text": "どうやらデバッグ用の特殊なコードパスっぽい",
-      "tailX": 1783.4971639948876,
-      "tailY": 634.0628545006391,
-      "color": "green"
+      "tailX": 2561.983375970128,
+      "tailY": 619.2627364022505,
+      "color": "green",
+      "showTail": true
     },
     {
       "id": 14,
       "type": "bubble",
-      "x": -1361.6612029970267,
-      "y": -366.5986695173697,
+      "x": -583.1749910217868,
+      "y": -381.39878761575824,
       "w": 289.38830124269384,
       "h": 97,
       "text": "blockデバイスに対する操作はこの構造体にまとめられている",
-      "tailX": -1128.3147672859147,
-      "tailY": -176.37913538880028,
-      "color": "green"
+      "tailX": -349.8285553106748,
+      "tailY": -191.17925348718887,
+      "color": "green",
+      "showTail": true
     },
     {
       "id": 15,
       "type": "frame",
-      "x": -1395,
-      "y": -447,
+      "x": -616.5137880247601,
+      "y": -461.80011809838857,
       "w": 1457,
       "h": 2249.13988902684,
       "label": "根拠その1: blockデバイス操作用の構造体において、.timeoutメソッドが定義されているかを確認する",
@@ -144,12 +149,516 @@
     {
       "id": 16,
       "type": "frame",
-      "x": 131,
-      "y": 5,
+      "x": 909.4862119752399,
+      "y": -9.800118098388593,
       "w": 2034,
       "h": 823,
       "label": "根拠その2: virtio_blk.cで 'time.*out' でgrepしてひっかかった関数を念のため調べてる",
       "color": "yellow"
+    },
+    {
+      "id": 17,
+      "x": -1542.6612173224337,
+      "y": 465.05776981721414,
+      "w": 605,
+      "h": 307,
+      "code": "static umode_t blk_mq_queue_attr_visible(struct kobject *kobj,\n\t\t\t\t\t struct attribute *attr, int n)\n{\n\tstruct gendisk *disk = container_of(kobj, struct gendisk, queue_kobj);\n\tstruct request_queue *q = disk->queue;\n\n\tif (!queue_is_mq(q))\n\t\treturn 0;\n\n\tif (attr == &queue_io_timeout_entry.attr && !q->mq_ops->timeout)\n\t\treturn 0;\n\n\treturn attr->mode;\n}",
+      "lang": "cpp",
+      "title": "blk_mq_queue_attr_visible",
+      "filePath": "block/blk-sysfs.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 622,
+      "color": "blue"
+    },
+    {
+      "id": 18,
+      "x": -1235.6459764061012,
+      "y": 894.0380594972343,
+      "w": 454,
+      "h": 307,
+      "code": "static void blk_mq_rq_timed_out(struct request *req)\n{\n\treq->rq_flags |= RQF_TIMED_OUT;\n\tif (req->q->mq_ops->timeout) {\n\t\tenum blk_eh_timer_return ret;\n\n\t\tret = req->q->mq_ops->timeout(req);\n\t\tif (ret == BLK_EH_DONE)\n\t\t\treturn;\n\t\tWARN_ON_ONCE(ret != BLK_EH_RESET_TIMER);\n\t}\n\n\tblk_add_timer(req);\n}",
+      "lang": "cpp",
+      "title": "blk_mq_rq_timed_out",
+      "filePath": "block/blk-mq.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1532,
+      "color": "blue"
+    },
+    {
+      "id": 21,
+      "x": -3151.142773505912,
+      "y": 869.1341459138764,
+      "w": 551,
+      "h": 213,
+      "code": "static bool blk_mq_handle_expired(struct request *rq, void *priv)\n{\n\tstruct blk_expired_data *expired = priv;\n\n\tif (blk_mq_req_expired(rq, expired))\n\t\tblk_mq_rq_timed_out(rq);\n\treturn true;\n}",
+      "lang": "cpp",
+      "title": "blk_mq_handle_expired",
+      "filePath": "block/blk-mq.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1601,
+      "color": "blue"
+    },
+    {
+      "id": 22,
+      "x": -2852.6830347915757,
+      "y": 228.34738612559795,
+      "w": 694,
+      "h": 385,
+      "code": "static bool blk_mq_req_expired(struct request *rq, struct blk_expired_data *expired)\n{\n\tunsigned long deadline;\n\n\tif (blk_mq_rq_state(rq) != MQ_RQ_IN_FLIGHT)\n\t\treturn false;\n\tif (rq->rq_flags & RQF_TIMED_OUT)\n\t\treturn false;\n\n\tdeadline = READ_ONCE(rq->deadline);\n\tif (time_after_eq(expired->timeout_start, deadline))\n\t\treturn true;\n\n\tif (expired->next == 0)\n\t\texpired->next = deadline;\n\telse if (time_after(expired->next, deadline))\n\t\texpired->next = deadline;\n\treturn false;\n}",
+      "lang": "cpp",
+      "title": "blk_mq_req_expired",
+      "filePath": "block/blk-mq.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1553,
+      "color": "blue"
+    },
+    {
+      "id": 23,
+      "x": -4000.0643055411165,
+      "y": 355.13196069580556,
+      "w": 613,
+      "h": 1063.7389899542106,
+      "code": "static void blk_mq_timeout_work(struct work_struct *work)\n{\n\tstruct request_queue *q =\n\t\tcontainer_of(work, struct request_queue, timeout_work);\n\tstruct blk_expired_data expired = {\n\t\t.timeout_start = jiffies,\n\t};\n\tstruct blk_mq_hw_ctx *hctx;\n\tunsigned long i;\n\n\t/* A deadlock might occur if a request is stuck requiring a\n\t * timeout at the same time a queue freeze is waiting\n\t * completion, since the timeout code would not be able to\n\t * acquire the queue reference here.\n\t *\n\t * That's why we don't use blk_queue_enter here; instead, we use\n\t * percpu_ref_tryget directly, because we need to be able to\n\t * obtain a reference even in the short window between the queue\n\t * starting to freeze, by dropping the first reference in\n\t * blk_freeze_queue_start, and the moment the last request is\n\t * consumed, marked by the instant q_usage_counter reaches\n\t * zero.\n\t */\n\tif (!percpu_ref_tryget(&q->q_usage_counter))\n\t\treturn;\n\n\t/* check if there is any timed-out request */\n\tblk_mq_queue_tag_busy_iter(q, blk_mq_check_expired, &expired);\n\tif (expired.has_timedout_rq) {\n\t\t/*\n\t\t * Before walking tags, we must ensure any submit started\n\t\t * before the current time has finished. Since the submit\n\t\t * uses srcu or rcu, wait for a synchronization point to\n\t\t * ensure all running submits have finished\n\t\t */\n\t\tblk_mq_wait_quiesce_done(q->tag_set);\n\n\t\texpired.next = 0;\n\t\tblk_mq_queue_tag_busy_iter(q, blk_mq_handle_expired, &expired);\n\t}\n\n\tif (expired.next != 0) {\n\t\tmod_timer(&q->timeout, expired.next);\n\t} else {\n\t\t/*\n\t\t * Request timeouts are handled as a forward rolling timer. If\n\t\t * we end up here it means that no requests are pending and\n\t\t * also that no request has been pending for a while. Mark\n\t\t * each hctx as idle.\n\t\t */\n\t\tqueue_for_each_hw_ctx(q, hctx, i) {\n\t\t\t/* the hctx may be unmapped, so check it here */\n\t\t\tif (blk_mq_hw_queue_mapped(hctx))\n\t\t\t\tblk_mq_tag_idle(hctx);\n\t\t}\n\t}\n\tblk_queue_exit(q);\n}",
+      "lang": "cpp",
+      "title": "blk_mq_timeout_work",
+      "filePath": "block/blk-mq.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1610,
+      "color": "blue"
+    },
+    {
+      "id": 24,
+      "x": -4877.828506261089,
+      "y": 427.23090998294333,
+      "w": 568,
+      "h": 869,
+      "code": "int blk_mq_init_allocated_queue(struct blk_mq_tag_set *set,\n\t\tstruct request_queue *q)\n{\n\t/* mark the queue as mq asap */\n\tq->mq_ops = set->ops;\n\n\t/*\n\t * ->tag_set has to be setup before initialize hctx, which cpuphp\n\t * handler needs it for checking queue mapping\n\t */\n\tq->tag_set = set;\n\n\tif (blk_mq_alloc_ctxs(q))\n\t\tgoto err_exit;\n\n\t/* init q->mq_kobj and sw queues' kobjects */\n\tblk_mq_sysfs_init(q);\n\n\tINIT_LIST_HEAD(&q->unused_hctx_list);\n\tspin_lock_init(&q->unused_hctx_lock);\n\n\txa_init(&q->hctx_table);\n\n\tblk_mq_realloc_hw_ctxs(set, q);\n\tif (!q->nr_hw_queues)\n\t\tgoto err_hctxs;\n\n\tINIT_WORK(&q->timeout_work, blk_mq_timeout_work);\n\tblk_queue_rq_timeout(q, set->timeout ? set->timeout : 30 * HZ);\n\n\tq->queue_flags |= QUEUE_FLAG_MQ_DEFAULT;\n\n\tINIT_DELAYED_WORK(&q->requeue_work, blk_mq_requeue_work);\n\tINIT_LIST_HEAD(&q->flush_list);\n\tINIT_LIST_HEAD(&q->requeue_list);\n\tspin_lock_init(&q->requeue_lock);\n\n\tq->nr_requests = set->queue_depth;\n\n\tblk_mq_init_cpu_queues(q, set->nr_hw_queues);\n\tblk_mq_add_queue_tag_set(set, q);\n\tblk_mq_map_swqueue(q);\n\treturn 0;\n\nerr_hctxs:\n\tblk_mq_release(q);\nerr_exit:\n\tq->mq_ops = NULL;\n\treturn -ENOMEM;\n}",
+      "lang": "cpp",
+      "title": "blk_mq_init_allocated_queue",
+      "filePath": "block/blk-mq.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 4307,
+      "color": "blue"
+    },
+    {
+      "id": 25,
+      "x": -5485.221232808617,
+      "y": -414.4387049536188,
+      "w": 574,
+      "h": 463,
+      "code": "struct request_queue *blk_mq_alloc_queue(struct blk_mq_tag_set *set,\n\t\tstruct queue_limits *lim, void *queuedata)\n{\n\tstruct queue_limits default_lim = { };\n\tstruct request_queue *q;\n\tint ret;\n\n\tif (!lim)\n\t\tlim = &default_lim;\n\tlim->features |= BLK_FEAT_IO_STAT | BLK_FEAT_NOWAIT;\n\tif (set->nr_maps > HCTX_TYPE_POLL)\n\t\tlim->features |= BLK_FEAT_POLL;\n\n\tq = blk_alloc_queue(lim, set->numa_node);\n\tif (IS_ERR(q))\n\t\treturn q;\n\tq->queuedata = queuedata;\n\tret = blk_mq_init_allocated_queue(set, q);\n\tif (ret) {\n\t\tblk_put_queue(q);\n\t\treturn ERR_PTR(ret);\n\t}\n\treturn q;\n}",
+      "lang": "cpp",
+      "title": "blk_mq_alloc_queue",
+      "filePath": "block/blk-mq.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 4141,
+      "color": "blue"
+    },
+    {
+      "id": 26,
+      "x": -10183.36883728309,
+      "y": -6875.951119780048,
+      "w": 664,
+      "h": 869,
+      "code": "int nvme_alloc_admin_tag_set(struct nvme_ctrl *ctrl, struct blk_mq_tag_set *set,\n\t\tconst struct blk_mq_ops *ops, unsigned int cmd_size)\n{\n\tstruct queue_limits lim = {};\n\tint ret;\n\n\tmemset(set, 0, sizeof(*set));\n\tset->ops = ops;\n\tset->queue_depth = NVME_AQ_MQ_TAG_DEPTH;\n\tif (ctrl->ops->flags & NVME_F_FABRICS)\n\t\t/* Reserved for fabric connect and keep alive */\n\t\tset->reserved_tags = 2;\n\tset->numa_node = ctrl->numa_node;\n\tset->flags = BLK_MQ_F_NO_SCHED;\n\tif (ctrl->ops->flags & NVME_F_BLOCKING)\n\t\tset->flags |= BLK_MQ_F_BLOCKING;\n\tset->cmd_size = cmd_size;\n\tset->driver_data = ctrl;\n\tset->nr_hw_queues = 1;\n\tset->timeout = NVME_ADMIN_TIMEOUT;\n\tret = blk_mq_alloc_tag_set(set);\n\tif (ret)\n\t\treturn ret;\n\n\tctrl->admin_q = blk_mq_alloc_queue(set, &lim, NULL);\n\tif (IS_ERR(ctrl->admin_q)) {\n\t\tret = PTR_ERR(ctrl->admin_q);\n\t\tgoto out_free_tagset;\n\t}\n\n\tif (ctrl->ops->flags & NVME_F_FABRICS) {\n\t\tctrl->fabrics_q = blk_mq_alloc_queue(set, NULL, NULL);\n\t\tif (IS_ERR(ctrl->fabrics_q)) {\n\t\t\tret = PTR_ERR(ctrl->fabrics_q);\n\t\t\tgoto out_cleanup_admin_q;\n\t\t}\n\t}\n\n\tctrl->admin_tagset = set;\n\treturn 0;\n\nout_cleanup_admin_q:\n\tblk_mq_destroy_queue(ctrl->admin_q);\n\tblk_put_queue(ctrl->admin_q);\nout_free_tagset:\n\tblk_mq_free_tag_set(set);\n\tctrl->admin_q = NULL;\n\tctrl->fabrics_q = NULL;\n\treturn ret;\n}",
+      "lang": "cpp",
+      "title": "nvme_alloc_admin_tag_set",
+      "filePath": "drivers/nvme/host/core.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 4498,
+      "color": "blue"
+    },
+    {
+      "id": 27,
+      "x": -10367.152348234327,
+      "y": -5240.603867228814,
+      "w": 641,
+      "h": 885,
+      "code": "int nvme_alloc_io_tag_set(struct nvme_ctrl *ctrl, struct blk_mq_tag_set *set,\n\t\tconst struct blk_mq_ops *ops, unsigned int nr_maps,\n\t\tunsigned int cmd_size)\n{\n\tint ret;\n\n\tmemset(set, 0, sizeof(*set));\n\tset->ops = ops;\n\tset->queue_depth = min_t(unsigned, ctrl->sqsize, BLK_MQ_MAX_DEPTH - 1);\n\t/*\n\t * Some Apple controllers requires tags to be unique across admin and\n\t * the (only) I/O queue, so reserve the first 32 tags of the I/O queue.\n\t */\n\tif (ctrl->quirks & NVME_QUIRK_SHARED_TAGS)\n\t\tset->reserved_tags = NVME_AQ_DEPTH;\n\telse if (ctrl->ops->flags & NVME_F_FABRICS)\n\t\t/* Reserved for fabric connect */\n\t\tset->reserved_tags = 1;\n\tset->numa_node = ctrl->numa_node;\n\tset->flags = BLK_MQ_F_SHOULD_MERGE;\n\tif (ctrl->ops->flags & NVME_F_BLOCKING)\n\t\tset->flags |= BLK_MQ_F_BLOCKING;\n\tset->cmd_size = cmd_size;\n\tset->driver_data = ctrl;\n\tset->nr_hw_queues = ctrl->queue_count - 1;\n\tset->timeout = NVME_IO_TIMEOUT;\n\tset->nr_maps = nr_maps;\n\tret = blk_mq_alloc_tag_set(set);\n\tif (ret)\n\t\treturn ret;\n\n\tif (ctrl->ops->flags & NVME_F_FABRICS) {\n\t\tstruct queue_limits lim = {\n\t\t\t.features\t= BLK_FEAT_SKIP_TAGSET_QUIESCE,\n\t\t};\n\n\t\tctrl->connect_q = blk_mq_alloc_queue(set, &lim, NULL);\n        \tif (IS_ERR(ctrl->connect_q)) {\n\t\t\tret = PTR_ERR(ctrl->connect_q);\n\t\t\tgoto out_free_tag_set;\n\t\t}\n\t}\n\n\tctrl->tagset = set;\n\treturn 0;\n\nout_free_tag_set:\n\tblk_mq_free_tag_set(set);\n\tctrl->connect_q = NULL;\n\treturn ret;\n}",
+      "lang": "cpp",
+      "title": "nvme_alloc_io_tag_set",
+      "filePath": "drivers/nvme/host/core.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 4567,
+      "color": "blue"
+    },
+    {
+      "id": 28,
+      "x": -10833.358646150118,
+      "y": 127.5720596586533,
+      "w": 592,
+      "h": 1807,
+      "code": "static struct scsi_device *scsi_alloc_sdev(struct scsi_target *starget,\n\t\t\t\t\t   u64 lun, void *hostdata)\n{\n\tunsigned int depth;\n\tstruct scsi_device *sdev;\n\tstruct request_queue *q;\n\tint display_failure_msg = 1, ret;\n\tstruct Scsi_Host *shost = dev_to_shost(starget->dev.parent);\n\tstruct queue_limits lim;\n\n\tsdev = kzalloc(sizeof(*sdev) + shost->transportt->device_size,\n\t\t       GFP_KERNEL);\n\tif (!sdev)\n\t\tgoto out;\n\n\tsdev->vendor = scsi_null_device_strs;\n\tsdev->model = scsi_null_device_strs;\n\tsdev->rev = scsi_null_device_strs;\n\tsdev->host = shost;\n\tsdev->queue_ramp_up_period = SCSI_DEFAULT_RAMP_UP_PERIOD;\n\tsdev->id = starget->id;\n\tsdev->lun = lun;\n\tsdev->channel = starget->channel;\n\tmutex_init(&sdev->state_mutex);\n\tsdev->sdev_state = SDEV_CREATED;\n\tINIT_LIST_HEAD(&sdev->siblings);\n\tINIT_LIST_HEAD(&sdev->same_target_siblings);\n\tINIT_LIST_HEAD(&sdev->starved_entry);\n\tINIT_LIST_HEAD(&sdev->event_list);\n\tspin_lock_init(&sdev->list_lock);\n\tmutex_init(&sdev->inquiry_mutex);\n\tINIT_WORK(&sdev->event_work, scsi_evt_thread);\n\tINIT_WORK(&sdev->requeue_work, scsi_requeue_run_queue);\n\n\tsdev->sdev_gendev.parent = get_device(&starget->dev);\n\tsdev->sdev_target = starget;\n\n\t/* usually NULL and set by ->slave_alloc instead */\n\tsdev->hostdata = hostdata;\n\n\t/* if the device needs this changing, it may do so in the\n\t * slave_configure function */\n\tsdev->max_device_blocked = SCSI_DEFAULT_DEVICE_BLOCKED;\n\n\t/*\n\t * Some low level driver could use device->type\n\t */\n\tsdev->type = -1;\n\n\t/*\n\t * Assume that the device will have handshaking problems,\n\t * and then fix this field later if it turns out it\n\t * doesn't\n\t */\n\tsdev->borken = 1;\n\n\tsdev->sg_reserved_size = INT_MAX;\n\n\tscsi_init_limits(shost, &lim);\n\tq = blk_mq_alloc_queue(&sdev->host->tag_set, &lim, sdev);\n\tif (IS_ERR(q)) {\n\t\t/* release fn is set up in scsi_sysfs_device_initialise, so\n\t\t * have to free and put manually here */\n\t\tput_device(&starget->dev);\n\t\tkfree(sdev);\n\t\tgoto out;\n\t}\n\tkref_get(&sdev->host->aux->tagset_refcnt);\n\tsdev->request_queue = q;\n\n\tdepth = sdev->host->cmd_per_lun ?: 1;\n\n\t/*\n\t * Use .can_queue as budget map's depth because we have to\n\t * support adjusting queue depth from sysfs. Meantime use\n\t * default device queue depth to figure out sbitmap shift\n\t * since we use this queue depth most of times.\n\t */\n\tif (scsi_realloc_sdev_budget_map(sdev, depth)) {\n\t\tput_device(&starget->dev);\n\t\tkfree(sdev);\n\t\tgoto out;\n\t}\n\n\tscsi_change_queue_depth(sdev, depth);\n\n\tscsi_sysfs_device_initialize(sdev);\n\n\tif (shost->hostt->slave_alloc) {\n\t\tret = shost->hostt->slave_alloc(sdev);\n\t\tif (ret) {\n\t\t\t/*\n\t\t\t * if LLDD reports slave not present, don't clutter\n\t\t\t * console with alloc failure messages\n\t\t\t */\n\t\t\tif (ret == -ENXIO)\n\t\t\t\tdisplay_failure_msg = 0;\n\t\t\tgoto out_device_destroy;\n\t\t}\n\t}\n\n\treturn sdev;\n\nout_device_destroy:\n\t__scsi_remove_device(sdev);\nout:\n\tif (display_failure_msg)\n\t\tprintk(ALLOC_FAILURE_MSG, __func__);\n\treturn NULL;\n}",
+      "lang": "cpp",
+      "title": "scsi_alloc_sdev",
+      "filePath": "drivers/scsi/scsi_scan.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 278,
+      "color": "blue"
+    },
+    {
+      "id": 29,
+      "x": -11342.870681679906,
+      "y": -2668.8950573943853,
+      "w": 622,
+      "h": 869,
+      "code": "struct request_queue *bsg_setup_queue(struct device *dev, const char *name,\n\t\tstruct queue_limits *lim, bsg_job_fn *job_fn,\n\t\tbsg_timeout_fn *timeout, int dd_job_size)\n{\n\tstruct bsg_set *bset;\n\tstruct blk_mq_tag_set *set;\n\tstruct request_queue *q;\n\tint ret = -ENOMEM;\n\n\tbset = kzalloc(sizeof(*bset), GFP_KERNEL);\n\tif (!bset)\n\t\treturn ERR_PTR(-ENOMEM);\n\n\tbset->job_fn = job_fn;\n\tbset->timeout_fn = timeout;\n\n\tset = &bset->tag_set;\n\tset->ops = &bsg_mq_ops;\n\tset->nr_hw_queues = 1;\n\tset->queue_depth = 128;\n\tset->numa_node = NUMA_NO_NODE;\n\tset->cmd_size = sizeof(struct bsg_job) + dd_job_size;\n\tset->flags = BLK_MQ_F_NO_SCHED | BLK_MQ_F_BLOCKING;\n\tif (blk_mq_alloc_tag_set(set))\n\t\tgoto out_tag_set;\n\n\tq = blk_mq_alloc_queue(set, lim, dev);\n\tif (IS_ERR(q)) {\n\t\tret = PTR_ERR(q);\n\t\tgoto out_queue;\n\t}\n\n\tblk_queue_rq_timeout(q, BLK_DEFAULT_SG_TIMEOUT);\n\n\tbset->bd = bsg_register_queue(q, dev, name, bsg_transport_sg_io_fn);\n\tif (IS_ERR(bset->bd)) {\n\t\tret = PTR_ERR(bset->bd);\n\t\tgoto out_cleanup_queue;\n\t}\n\n\treturn q;\nout_cleanup_queue:\n\tblk_mq_destroy_queue(q);\n\tblk_put_queue(q);\nout_queue:\n\tblk_mq_free_tag_set(set);\nout_tag_set:\n\tkfree(bset);\n\treturn ERR_PTR(ret);\n}",
+      "lang": "cpp",
+      "title": "bsg_setup_queue",
+      "filePath": "block/bsg-lib.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 362,
+      "color": "blue"
+    },
+    {
+      "id": 30,
+      "x": -7592.733904705061,
+      "y": 5342.345751808247,
+      "w": 741,
+      "h": 729,
+      "code": "int dm_mq_init_request_queue(struct mapped_device *md, struct dm_table *t)\n{\n\tstruct dm_target *immutable_tgt;\n\tint err;\n\n\tmd->tag_set = kzalloc_node(sizeof(struct blk_mq_tag_set), GFP_KERNEL, md->numa_node_id);\n\tif (!md->tag_set)\n\t\treturn -ENOMEM;\n\n\tmd->tag_set->ops = &dm_mq_ops;\n\tmd->tag_set->queue_depth = dm_get_blk_mq_queue_depth();\n\tmd->tag_set->numa_node = md->numa_node_id;\n\tmd->tag_set->flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_STACKING;\n\tmd->tag_set->nr_hw_queues = dm_get_blk_mq_nr_hw_queues();\n\tmd->tag_set->driver_data = md;\n\n\tmd->tag_set->cmd_size = sizeof(struct dm_rq_target_io);\n\timmutable_tgt = dm_table_get_immutable_target(t);\n\tif (immutable_tgt && immutable_tgt->per_io_data_size) {\n\t\t/* any target-specific per-io data is immediately after the tio */\n\t\tmd->tag_set->cmd_size += immutable_tgt->per_io_data_size;\n\t\tmd->init_tio_pdu = true;\n\t}\n\n\terr = blk_mq_alloc_tag_set(md->tag_set);\n\tif (err)\n\t\tgoto out_kfree_tag_set;\n\n\terr = blk_mq_init_allocated_queue(md->tag_set, md->queue);\n\tif (err)\n\t\tgoto out_tag_set;\n\treturn 0;\n\nout_tag_set:\n\tblk_mq_free_tag_set(md->tag_set);\nout_kfree_tag_set:\n\tkfree(md->tag_set);\n\tmd->tag_set = NULL;\n\n\treturn err;\n}",
+      "lang": "cpp",
+      "title": "dm_mq_init_request_queue",
+      "filePath": "drivers/md/dm-rq.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 538,
+      "color": "blue"
+    },
+    {
+      "id": 31,
+      "x": -13142.795880839247,
+      "y": -3495.293897462951,
+      "w": 637,
+      "h": 526,
+      "code": "static int sas_bsg_initialize(struct Scsi_Host *shost, struct sas_rphy *rphy)\n{\n\tstruct request_queue *q;\n\n\tif (!to_sas_internal(shost->transportt)->f->smp_handler) {\n\t\tprintk(\"%s can't handle SMP requests\\n\", shost->hostt->name);\n\t\treturn 0;\n\t}\n\n\tif (rphy) {\n\t\tq = bsg_setup_queue(&rphy->dev, dev_name(&rphy->dev), NULL,\n\t\t\t\tsas_smp_dispatch, NULL, 0);\n\t\tif (IS_ERR(q))\n\t\t\treturn PTR_ERR(q);\n\t\trphy->q = q;\n\t} else {\n\t\tchar name[20];\n\n\t\tsnprintf(name, sizeof(name), \"sas_host%d\", shost->host_no);\n\t\tq = bsg_setup_queue(&shost->shost_gendev, name, NULL,\n\t\t\t\tsas_smp_dispatch, NULL, 0);\n\t\tif (IS_ERR(q))\n\t\t\treturn PTR_ERR(q);\n\t\tto_sas_host_attrs(shost)->q = q;\n\t}\n\n\treturn 0;\n}",
+      "lang": "cpp",
+      "title": "sas_bsg_initialize",
+      "filePath": "drivers/scsi/scsi_transport_sas.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 191,
+      "color": "blue"
+    },
+    {
+      "id": 32,
+      "x": -13147.37921417258,
+      "y": -2929.043897462951,
+      "w": 710.1666666666666,
+      "h": 557,
+      "code": "/**\n * iscsi_bsg_host_add - Create and add the bsg hooks to receive requests\n * @shost: shost for iscsi_host\n * @ihost: iscsi_cls_host adding the structures to\n */\nstatic int\niscsi_bsg_host_add(struct Scsi_Host *shost, struct iscsi_cls_host *ihost)\n{\n        struct device *dev = &shost->shost_gendev;\n        struct iscsi_internal *i = to_iscsi_internal(shost->transportt);\n        struct queue_limits lim;\n        struct request_queue *q;\n        char bsg_name[20];\n\n        if (!i->iscsi_transport->bsg_request)\n                return -ENOTSUPP;\n\n        snprintf(bsg_name, sizeof(bsg_name), \"iscsi_host%d\", shost->host_no);\n        scsi_init_limits(shost, &lim);\n        q = bsg_setup_queue(dev, bsg_name, &lim, iscsi_bsg_host_dispatch, NULL,\n                        0);\n        if (IS_ERR(q)) {\n                shost_printk(KERN_ERR, shost, \"bsg interface failed to \"\n                             \"initialize - no request queue\\n\");\n                return PTR_ERR(q);\n        }\n\n        ihost->bsg_q = q;\n        return 0;\n}",
+      "lang": "cpp",
+      "title": "iscsi_bsg_host_add",
+      "filePath": "drivers/scsi/scsi_transport_iscsi.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1534,
+      "color": "blue"
+    },
+    {
+      "id": 33,
+      "x": -13163.671865701137,
+      "y": -2311.4784203531212,
+      "w": 788,
+      "h": 635,
+      "code": "/**\n * fc_bsg_hostadd - Create and add the bsg hooks so we can receive requests\n * @shost:      shost for fc_host\n * @fc_host:    fc_host adding the structures to\n */\nstatic int\nfc_bsg_hostadd(struct Scsi_Host *shost, struct fc_host_attrs *fc_host)\n{\n        struct device *dev = &shost->shost_gendev;\n        struct fc_internal *i = to_fc_internal(shost->transportt);\n        struct queue_limits lim;\n        struct request_queue *q;\n        char bsg_name[20];\n\n        fc_host->rqst_q = NULL;\n\n        if (!i->f->bsg_request)\n                return -ENOTSUPP;\n\n        snprintf(bsg_name, sizeof(bsg_name),\n                 \"fc_host%d\", shost->host_no);\n        scsi_init_limits(shost, &lim);\n        lim.max_segments = min_not_zero(lim.max_segments, (unsigned long)i->f->max_bsg_segments);\n        q = bsg_setup_queue(dev, bsg_name, &lim, fc_bsg_dispatch,\n                        fc_bsg_job_timeout, i->f->dd_bsg_size);\n        if (IS_ERR(q)) {\n                dev_err(dev,\n                        \"fc_host%d: bsg interface failed to initialize - setup queue\\n\",\n                        shost->host_no);\n                return PTR_ERR(q);\n        }\n        blk_queue_rq_timeout(q, FC_DEFAULT_BSG_TIMEOUT);\n        fc_host->rqst_q = q;\n        return 0;\n}",
+      "lang": "cpp",
+      "title": "fc_bsg_hostadd",
+      "filePath": "drivers/scsi/scsi_transport_fc.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1,
+      "color": "blue"
+    },
+    {
+      "id": 34,
+      "x": -13163.671865701137,
+      "y": -1641.4784203531215,
+      "w": 787,
+      "h": 557,
+      "code": "/**\n * fc_bsg_rportadd - Create and add the bsg hooks so we can receive requests\n * @shost:      shost that rport is attached to\n * @rport:      rport that the bsg hooks are being attached to\n */\nstatic int\nfc_bsg_rportadd(struct Scsi_Host *shost, struct fc_rport *rport)\n{\n        struct device *dev = &rport->dev;\n        struct fc_internal *i = to_fc_internal(shost->transportt);\n        struct queue_limits lim;\n        struct request_queue *q;\n\n        rport->rqst_q = NULL;\n\n        if (!i->f->bsg_request)\n                return -ENOTSUPP;\n\n        scsi_init_limits(shost, &lim);\n        lim.max_segments = min_not_zero(lim.max_segments, (unsigned long)i->f->max_bsg_segments);\n        q = bsg_setup_queue(dev, dev_name(dev), &lim, fc_bsg_dispatch_prep,\n                                fc_bsg_job_timeout, i->f->dd_bsg_size);\n        if (IS_ERR(q)) {\n                dev_err(dev, \"failed to setup bsg queue\\n\");\n                return PTR_ERR(q);\n        }\n        blk_queue_rq_timeout(q, BLK_DEFAULT_SG_TIMEOUT);\n        rport->rqst_q = q;\n        return 0;\n}",
+      "lang": "cpp",
+      "title": "fc_bsg_rportadd",
+      "filePath": "drivers/scsi/scsi_transport_fc.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1,
+      "color": "blue"
+    },
+    {
+      "id": 35,
+      "x": -8788.923924714267,
+      "y": 5305.043817118423,
+      "w": 710,
+      "h": 1057,
+      "code": "int dm_setup_md_queue(struct mapped_device *md, struct dm_table *t)\n{\n\tenum dm_queue_mode type = dm_table_get_type(t);\n\tstruct queue_limits limits;\n\tstruct table_device *td;\n\tint r;\n\n\tWARN_ON_ONCE(type == DM_TYPE_NONE);\n\n\tif (type == DM_TYPE_REQUEST_BASED) {\n\t\tmd->disk->fops = &dm_rq_blk_dops;\n\t\tr = dm_mq_init_request_queue(md, t);\n\t\tif (r) {\n\t\t\tDMERR(\"Cannot initialize queue for request-based dm mapped device\");\n\t\t\treturn r;\n\t\t}\n\t}\n\n\tr = dm_calculate_queue_limits(t, &limits);\n\tif (r) {\n\t\tDMERR(\"Cannot calculate initial queue limits\");\n\t\treturn r;\n\t}\n\tr = dm_table_set_restrictions(t, md->queue, &limits);\n\tif (r)\n\t\treturn r;\n\n\t/*\n\t * Hold lock to make sure add_disk() and del_gendisk() won't concurrent\n\t * with open_table_device() and close_table_device().\n\t */\n\tmutex_lock(&md->table_devices_lock);\n\tr = add_disk(md->disk);\n\tmutex_unlock(&md->table_devices_lock);\n\tif (r)\n\t\treturn r;\n\n\t/*\n\t * Register the holder relationship for devices added before the disk\n\t * was live.\n\t */\n\tlist_for_each_entry(td, &md->table_devices, list) {\n\t\tr = bd_link_disk_holder(td->dm_dev.bdev, md->disk);\n\t\tif (r)\n\t\t\tgoto out_undo_holders;\n\t}\n\n\tr = dm_sysfs_init(md);\n\tif (r)\n\t\tgoto out_undo_holders;\n\n\tmd->type = type;\n\treturn 0;\n\nout_undo_holders:\n\tlist_for_each_entry_continue_reverse(td, &md->table_devices, list)\n\t\tbd_unlink_disk_holder(td->dm_dev.bdev, md->disk);\n\tmutex_lock(&md->table_devices_lock);\n\tdel_gendisk(md->disk);\n\tmutex_unlock(&md->table_devices_lock);\n\treturn r;\n}",
+      "lang": "cpp",
+      "title": "dm_setup_md_queue",
+      "filePath": "drivers/md/dm.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 2541,
+      "color": "blue"
+    },
+    {
+      "id": 36,
+      "x": -10501.479393336625,
+      "y": 4395.1746942509135,
+      "w": 726,
+      "h": 1432.6772684917132,
+      "code": "static int table_load(struct file *filp, struct dm_ioctl *param, size_t param_size)\n{\n\tint r;\n\tstruct hash_cell *hc;\n\tstruct dm_table *t, *old_map = NULL;\n\tstruct mapped_device *md;\n\tstruct target_type *immutable_target_type;\n\n\tmd = find_device(param);\n\tif (!md)\n\t\treturn -ENXIO;\n\n\tr = dm_table_create(&t, get_mode(param), param->target_count, md);\n\tif (r)\n\t\tgoto err;\n\n\t/* Protect md->type and md->queue against concurrent table loads. */\n\tdm_lock_md_type(md);\n\tr = populate_table(t, param, param_size);\n\tif (r)\n\t\tgoto err_unlock_md_type;\n\n\tdm_ima_measure_on_table_load(t, STATUSTYPE_IMA);\n\n\timmutable_target_type = dm_get_immutable_target_type(md);\n\tif (immutable_target_type &&\n\t    (immutable_target_type != dm_table_get_immutable_target_type(t)) &&\n\t    !dm_table_get_wildcard_target(t)) {\n\t\tDMERR(\"can't replace immutable target type %s\",\n\t\t      immutable_target_type->name);\n\t\tr = -EINVAL;\n\t\tgoto err_unlock_md_type;\n\t}\n\n\tif (dm_get_md_type(md) == DM_TYPE_NONE) {\n\t\t/* setup md->queue to reflect md's type (may block) */\n\t\tr = dm_setup_md_queue(md, t);\n\t\tif (r) {\n\t\t\tDMERR(\"unable to set up device queue for new table.\");\n\t\t\tgoto err_unlock_md_type;\n\t\t}\n\t} else if (!is_valid_type(dm_get_md_type(md), dm_table_get_type(t))) {\n\t\tDMERR(\"can't change device type (old=%u vs new=%u) after initial table load.\",\n\t\t      dm_get_md_type(md), dm_table_get_type(t));\n\t\tr = -EINVAL;\n\t\tgoto err_unlock_md_type;\n\t}\n\n\tdm_unlock_md_type(md);\n\n\t/* stage inactive table */\n\tdown_write(&_hash_lock);\n\thc = dm_get_mdptr(md);\n\tif (!hc) {\n\t\tDMERR(\"device has been removed from the dev hash table.\");\n\t\tup_write(&_hash_lock);\n\t\tr = -ENXIO;\n\t\tgoto err_destroy_table;\n\t}\n\n\tif (hc->new_map)\n\t\told_map = hc->new_map;\n\thc->new_map = t;\n\tup_write(&_hash_lock);\n\n\tparam->flags |= DM_INACTIVE_PRESENT_FLAG;\n\t__dev_status(md, param);\n\n\tif (old_map) {\n\t\tdm_sync_table(md);\n\t\tdm_table_destroy(old_map);\n\t}\n\n\tdm_put(md);\n\n\treturn 0;\n\nerr_unlock_md_type:\n\tdm_unlock_md_type(md);\nerr_destroy_table:\n\tdm_table_destroy(t);\nerr:\n\tdm_put(md);\n\n\treturn r;\n}",
+      "lang": "cpp",
+      "title": "table_load",
+      "filePath": "drivers/md/dm-ioctl.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1514,
+      "color": "blue"
+    },
+    {
+      "id": 37,
+      "x": -10478.676303809423,
+      "y": 6012.687776828669,
+      "w": 613,
+      "h": 1479,
+      "code": "int __init dm_early_create(struct dm_ioctl *dmi,\n\t\t\t   struct dm_target_spec **spec_array,\n\t\t\t   char **target_params_array)\n{\n\tint r, m = DM_ANY_MINOR;\n\tstruct dm_table *t, *old_map;\n\tstruct mapped_device *md;\n\tunsigned int i;\n\n\tif (!dmi->target_count)\n\t\treturn -EINVAL;\n\n\tr = check_name(dmi->name);\n\tif (r)\n\t\treturn r;\n\n\tif (dmi->flags & DM_PERSISTENT_DEV_FLAG)\n\t\tm = MINOR(huge_decode_dev(dmi->dev));\n\n\t/* alloc dm device */\n\tr = dm_create(m, &md);\n\tif (r)\n\t\treturn r;\n\n\t/* hash insert */\n\tr = dm_hash_insert(dmi->name, *dmi->uuid ? dmi->uuid : NULL, md);\n\tif (r)\n\t\tgoto err_destroy_dm;\n\n\t/* alloc table */\n\tr = dm_table_create(&t, get_mode(dmi), dmi->target_count, md);\n\tif (r)\n\t\tgoto err_hash_remove;\n\n\t/* add targets */\n\tfor (i = 0; i < dmi->target_count; i++) {\n\t\tr = dm_table_add_target(t, spec_array[i]->target_type,\n\t\t\t\t\t(sector_t) spec_array[i]->sector_start,\n\t\t\t\t\t(sector_t) spec_array[i]->length,\n\t\t\t\t\ttarget_params_array[i]);\n\t\tif (r) {\n\t\t\tDMERR(\"error adding target to table\");\n\t\t\tgoto err_destroy_table;\n\t\t}\n\t}\n\n\t/* finish table */\n\tr = dm_table_complete(t);\n\tif (r)\n\t\tgoto err_destroy_table;\n\n\t/* setup md->queue to reflect md's type (may block) */\n\tr = dm_setup_md_queue(md, t);\n\tif (r) {\n\t\tDMERR(\"unable to set up device queue for new table.\");\n\t\tgoto err_destroy_table;\n\t}\n\n\t/* Set new map */\n\tdm_suspend(md, 0);\n\told_map = dm_swap_table(md, t);\n\tif (IS_ERR(old_map)) {\n\t\tr = PTR_ERR(old_map);\n\t\tgoto err_destroy_table;\n\t}\n\tset_disk_ro(dm_disk(md), !!(dmi->flags & DM_READONLY_FLAG));\n\n\t/* resume device */\n\tr = dm_resume(md);\n\tif (r)\n\t\tgoto err_destroy_table;\n\n\tDMINFO(\"%s (%s) is ready\", md->disk->disk_name, dmi->name);\n\tdm_put(md);\n\treturn 0;\n\nerr_destroy_table:\n\tdm_table_destroy(t);\nerr_hash_remove:\n\tdown_write(&_hash_lock);\n\t(void) __hash_remove(__get_name_cell(dmi->name));\n\tup_write(&_hash_lock);\n\t/* release reference from __get_name_cell */\n\tdm_put(md);\nerr_destroy_dm:\n\tdm_put(md);\n\tdm_destroy(md);\n\treturn r;\n}",
+      "lang": "cpp",
+      "title": "dm_early_create",
+      "filePath": "drivers/md/dm-ioctl.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 2267,
+      "color": "blue"
+    },
+    {
+      "id": 38,
+      "x": -13848.941247858984,
+      "y": -5854.4096449558,
+      "w": 626,
+      "h": 1697,
+      "code": "static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)\n{\n\tstruct nvme_dev *dev;\n\tint result = -ENOMEM;\n\n\tdev = nvme_pci_alloc_dev(pdev, id);\n\tif (IS_ERR(dev))\n\t\treturn PTR_ERR(dev);\n\n\tresult = nvme_add_ctrl(&dev->ctrl);\n\tif (result)\n\t\tgoto out_put_ctrl;\n\n\tresult = nvme_dev_map(dev);\n\tif (result)\n\t\tgoto out_uninit_ctrl;\n\n\tresult = nvme_setup_prp_pools(dev);\n\tif (result)\n\t\tgoto out_dev_unmap;\n\n\tresult = nvme_pci_alloc_iod_mempool(dev);\n\tif (result)\n\t\tgoto out_release_prp_pools;\n\n\tdev_info(dev->ctrl.device, \"pci function %s\\n\", dev_name(&pdev->dev));\n\n\tresult = nvme_pci_enable(dev);\n\tif (result)\n\t\tgoto out_release_iod_mempool;\n\n\tresult = nvme_alloc_admin_tag_set(&dev->ctrl, &dev->admin_tagset,\n\t\t\t\t&nvme_mq_admin_ops, sizeof(struct nvme_iod));\n\tif (result)\n\t\tgoto out_disable;\n\n\t/*\n\t * Mark the controller as connecting before sending admin commands to\n\t * allow the timeout handler to do the right thing.\n\t */\n\tif (!nvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_CONNECTING)) {\n\t\tdev_warn(dev->ctrl.device,\n\t\t\t\"failed to mark controller CONNECTING\\n\");\n\t\tresult = -EBUSY;\n\t\tgoto out_disable;\n\t}\n\n\tresult = nvme_init_ctrl_finish(&dev->ctrl, false);\n\tif (result)\n\t\tgoto out_disable;\n\n\tnvme_dbbuf_dma_alloc(dev);\n\n\tresult = nvme_setup_host_mem(dev);\n\tif (result < 0)\n\t\tgoto out_disable;\n\n\tresult = nvme_setup_io_queues(dev);\n\tif (result)\n\t\tgoto out_disable;\n\n\tif (dev->online_queues > 1) {\n\t\tnvme_alloc_io_tag_set(&dev->ctrl, &dev->tagset, &nvme_mq_ops,\n\t\t\t\tnvme_pci_nr_maps(dev), sizeof(struct nvme_iod));\n\t\tnvme_dbbuf_set(dev);\n\t}\n\n\tif (!dev->ctrl.tagset)\n\t\tdev_warn(dev->ctrl.device, \"IO queues not created\\n\");\n\n\tif (!nvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_LIVE)) {\n\t\tdev_warn(dev->ctrl.device,\n\t\t\t\"failed to mark controller live state\\n\");\n\t\tresult = -ENODEV;\n\t\tgoto out_disable;\n\t}\n\n\tpci_set_drvdata(pdev, dev);\n\n\tnvme_start_ctrl(&dev->ctrl);\n\tnvme_put_ctrl(&dev->ctrl);\n\tflush_work(&dev->ctrl.scan_work);\n\treturn 0;\n\nout_disable:\n\tnvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_DELETING);\n\tnvme_dev_disable(dev, true);\n\tnvme_free_host_mem(dev);\n\tnvme_dev_remove_admin(dev);\n\tnvme_dbbuf_dma_free(dev);\n\tnvme_free_queues(dev, 0);\nout_release_iod_mempool:\n\tmempool_destroy(dev->iod_mempool);\nout_release_prp_pools:\n\tnvme_release_prp_pools(dev);\nout_dev_unmap:\n\tnvme_dev_unmap(dev);\nout_uninit_ctrl:\n\tnvme_uninit_ctrl(&dev->ctrl);\nout_put_ctrl:\n\tnvme_put_ctrl(&dev->ctrl);\n\treturn result;\n}",
+      "lang": "cpp",
+      "title": "nvme_probe",
+      "filePath": "drivers/nvme/host/pci.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 3077,
+      "color": "blue"
+    },
+    {
+      "id": 39,
+      "x": -11055.719113779958,
+      "y": -6040.707988896388,
+      "w": 621,
+      "h": 463,
+      "code": "static bool nvme_pci_update_nr_queues(struct nvme_dev *dev)\n{\n\tif (!dev->ctrl.tagset) {\n\t\tnvme_alloc_io_tag_set(&dev->ctrl, &dev->tagset, &nvme_mq_ops,\n\t\t\t\tnvme_pci_nr_maps(dev), sizeof(struct nvme_iod));\n\t\treturn true;\n\t}\n\n\t/* Give up if we are racing with nvme_dev_disable() */\n\tif (!mutex_trylock(&dev->shutdown_lock))\n\t\treturn false;\n\n\t/* Check if nvme_dev_disable() has been executed already */\n\tif (!dev->online_queues) {\n\t\tmutex_unlock(&dev->shutdown_lock);\n\t\treturn false;\n\t}\n\n\tblk_mq_update_nr_hw_queues(&dev->tagset, dev->online_queues - 1);\n\t/* free previously allocated queues that are no longer usable */\n\tnvme_free_queues(dev, dev->online_queues);\n\tmutex_unlock(&dev->shutdown_lock);\n\treturn true;\n}",
+      "lang": "cpp",
+      "title": "nvme_pci_update_nr_queues",
+      "filePath": "drivers/nvme/host/pci.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 2510,
+      "color": "blue"
+    },
+    {
+      "id": 40,
+      "x": -12072.692434399463,
+      "y": -6832.040134493254,
+      "w": 621,
+      "h": 1713,
+      "code": "static void nvme_reset_work(struct work_struct *work)\n{\n\tstruct nvme_dev *dev =\n\t\tcontainer_of(work, struct nvme_dev, ctrl.reset_work);\n\tbool was_suspend = !!(dev->ctrl.ctrl_config & NVME_CC_SHN_NORMAL);\n\tint result;\n\n\tif (nvme_ctrl_state(&dev->ctrl) != NVME_CTRL_RESETTING) {\n\t\tdev_warn(dev->ctrl.device, \"ctrl state %d is not RESETTING\\n\",\n\t\t\t dev->ctrl.state);\n\t\tresult = -ENODEV;\n\t\tgoto out;\n\t}\n\n\t/*\n\t * If we're called to reset a live controller first shut it down before\n\t * moving on.\n\t */\n\tif (dev->ctrl.ctrl_config & NVME_CC_ENABLE)\n\t\tnvme_dev_disable(dev, false);\n\tnvme_sync_queues(&dev->ctrl);\n\n\tmutex_lock(&dev->shutdown_lock);\n\tresult = nvme_pci_enable(dev);\n\tif (result)\n\t\tgoto out_unlock;\n\tnvme_unquiesce_admin_queue(&dev->ctrl);\n\tmutex_unlock(&dev->shutdown_lock);\n\n\t/*\n\t * Introduce CONNECTING state from nvme-fc/rdma transports to mark the\n\t * initializing procedure here.\n\t */\n\tif (!nvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_CONNECTING)) {\n\t\tdev_warn(dev->ctrl.device,\n\t\t\t\"failed to mark controller CONNECTING\\n\");\n\t\tresult = -EBUSY;\n\t\tgoto out;\n\t}\n\n\tresult = nvme_init_ctrl_finish(&dev->ctrl, was_suspend);\n\tif (result)\n\t\tgoto out;\n\n\tnvme_dbbuf_dma_alloc(dev);\n\n\tresult = nvme_setup_host_mem(dev);\n\tif (result < 0)\n\t\tgoto out;\n\n\tresult = nvme_setup_io_queues(dev);\n\tif (result)\n\t\tgoto out;\n\n\t/*\n\t * Freeze and update the number of I/O queues as thos might have\n\t * changed.  If there are no I/O queues left after this reset, keep the\n\t * controller around but remove all namespaces.\n\t */\n\tif (dev->online_queues > 1) {\n\t\tnvme_dbbuf_set(dev);\n\t\tnvme_unquiesce_io_queues(&dev->ctrl);\n\t\tnvme_wait_freeze(&dev->ctrl);\n\t\tif (!nvme_pci_update_nr_queues(dev))\n\t\t\tgoto out;\n\t\tnvme_unfreeze(&dev->ctrl);\n\t} else {\n\t\tdev_warn(dev->ctrl.device, \"IO queues lost\\n\");\n\t\tnvme_mark_namespaces_dead(&dev->ctrl);\n\t\tnvme_unquiesce_io_queues(&dev->ctrl);\n\t\tnvme_remove_namespaces(&dev->ctrl);\n\t\tnvme_free_tagset(dev);\n\t}\n\n\t/*\n\t * If only admin queue live, keep it to do further investigation or\n\t * recovery.\n\t */\n\tif (!nvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_LIVE)) {\n\t\tdev_warn(dev->ctrl.device,\n\t\t\t\"failed to mark controller live state\\n\");\n\t\tresult = -ENODEV;\n\t\tgoto out;\n\t}\n\n\tnvme_start_ctrl(&dev->ctrl);\n\treturn;\n\n out_unlock:\n\tmutex_unlock(&dev->shutdown_lock);\n out:\n\t/*\n\t * Set state to deleting now to avoid blocking nvme_wait_reset(), which\n\t * may be holding this pci_dev's device lock.\n\t */\n\tdev_warn(dev->ctrl.device, \"Disabling device after reset failure: %d\\n\",\n\t\t result);\n\tnvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_DELETING);\n\tnvme_dev_disable(dev, true);\n\tnvme_sync_queues(&dev->ctrl);\n\tnvme_mark_namespaces_dead(&dev->ctrl);\n\tnvme_unquiesce_io_queues(&dev->ctrl);\n\tnvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_DEAD);\n}",
+      "lang": "cpp",
+      "title": "nvme_reset_work",
+      "filePath": "drivers/nvme/host/pci.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 2750,
+      "color": "blue"
+    },
+    {
+      "id": 41,
+      "x": -12827.160112807542,
+      "y": -6649.045986685365,
+      "w": 621,
+      "h": 1182,
+      "code": "static struct nvme_dev *nvme_pci_alloc_dev(struct pci_dev *pdev,\n\t\tconst struct pci_device_id *id)\n{\n\tunsigned long quirks = id->driver_data;\n\tint node = dev_to_node(&pdev->dev);\n\tstruct nvme_dev *dev;\n\tint ret = -ENOMEM;\n\n\tdev = kzalloc_node(sizeof(*dev), GFP_KERNEL, node);\n\tif (!dev)\n\t\treturn ERR_PTR(-ENOMEM);\n\tINIT_WORK(&dev->ctrl.reset_work, nvme_reset_work);\n\tmutex_init(&dev->shutdown_lock);\n\n\tdev->nr_write_queues = write_queues;\n\tdev->nr_poll_queues = poll_queues;\n\tdev->nr_allocated_queues = nvme_max_io_queues(dev) + 1;\n\tdev->queues = kcalloc_node(dev->nr_allocated_queues,\n\t\t\tsizeof(struct nvme_queue), GFP_KERNEL, node);\n\tif (!dev->queues)\n\t\tgoto out_free_dev;\n\n\tdev->dev = get_device(&pdev->dev);\n\n\tquirks |= check_vendor_combination_bug(pdev);\n\tif (!noacpi &&\n\t    !(quirks & NVME_QUIRK_FORCE_NO_SIMPLE_SUSPEND) &&\n\t    acpi_storage_d3(&pdev->dev)) {\n\t\t/*\n\t\t * Some systems use a bios work around to ask for D3 on\n\t\t * platforms that support kernel managed suspend.\n\t\t */\n\t\tdev_info(&pdev->dev,\n\t\t\t \"platform quirk: setting simple suspend\\n\");\n\t\tquirks |= NVME_QUIRK_SIMPLE_SUSPEND;\n\t}\n\tret = nvme_init_ctrl(&dev->ctrl, &pdev->dev, &nvme_pci_ctrl_ops,\n\t\t\t     quirks);\n\tif (ret)\n\t\tgoto out_put_device;\n\n\tif (dev->ctrl.quirks & NVME_QUIRK_DMA_ADDRESS_BITS_48)\n\t\tdma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(48));\n\telse\n\t\tdma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));\n\tdma_set_min_align_mask(&pdev->dev, NVME_CTRL_PAGE_SIZE - 1);\n\tdma_set_max_seg_size(&pdev->dev, 0xffffffff);\n\n\t/*\n\t * Limit the max command size to prevent iod->sg allocations going\n\t * over a single page.\n\t */\n\tdev->ctrl.max_hw_sectors = min_t(u32,\n\t\tNVME_MAX_KB_SZ << 1, dma_opt_mapping_size(&pdev->dev) >> 9);\n\tdev->ctrl.max_segments = NVME_MAX_SEGS;\n\n\t/*\n\t * There is no support for SGLs for metadata (yet), so we are limited to\n\t * a single integrity segment for the separate metadata pointer.\n\t */\n\tdev->ctrl.max_integrity_segments = 1;\n\treturn dev;\n\nout_put_device:\n\tput_device(dev->dev);\n\tkfree(dev->queues);\nout_free_dev:\n\tkfree(dev);\n\treturn ERR_PTR(ret);\n}",
+      "lang": "cpp",
+      "title": "nvme_pci_alloc_dev",
+      "filePath": "drivers/nvme/host/pci.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 3006,
+      "color": "blue"
+    },
+    {
+      "id": 42,
+      "x": -11701.282145694267,
+      "y": -385.3715285014613,
+      "w": 621,
+      "h": 2229,
+      "code": "static int scsi_probe_and_add_lun(struct scsi_target *starget,\n\t\t\t\t  u64 lun, blist_flags_t *bflagsp,\n\t\t\t\t  struct scsi_device **sdevp,\n\t\t\t\t  enum scsi_scan_mode rescan,\n\t\t\t\t  void *hostdata)\n{\n\tstruct scsi_device *sdev;\n\tunsigned char *result;\n\tblist_flags_t bflags;\n\tint res = SCSI_SCAN_NO_RESPONSE, result_len = 256;\n\tstruct Scsi_Host *shost = dev_to_shost(starget->dev.parent);\n\n\t/*\n\t * The rescan flag is used as an optimization, the first scan of a\n\t * host adapter calls into here with rescan == 0.\n\t */\n\tsdev = scsi_device_lookup_by_target(starget, lun);\n\tif (sdev) {\n\t\tif (rescan != SCSI_SCAN_INITIAL || !scsi_device_created(sdev)) {\n\t\t\tSCSI_LOG_SCAN_BUS(3, sdev_printk(KERN_INFO, sdev,\n\t\t\t\t\"scsi scan: device exists on %s\\n\",\n\t\t\t\tdev_name(&sdev->sdev_gendev)));\n\t\t\tif (sdevp)\n\t\t\t\t*sdevp = sdev;\n\t\t\telse\n\t\t\t\tscsi_device_put(sdev);\n\n\t\t\tif (bflagsp)\n\t\t\t\t*bflagsp = scsi_get_device_flags(sdev,\n\t\t\t\t\t\t\t\t sdev->vendor,\n\t\t\t\t\t\t\t\t sdev->model);\n\t\t\treturn SCSI_SCAN_LUN_PRESENT;\n\t\t}\n\t\tscsi_device_put(sdev);\n\t} else\n\t\tsdev = scsi_alloc_sdev(starget, lun, hostdata);\n\tif (!sdev)\n\t\tgoto out;\n\n\tresult = kmalloc(result_len, GFP_KERNEL);\n\tif (!result)\n\t\tgoto out_free_sdev;\n\n\tif (scsi_probe_lun(sdev, result, result_len, &bflags))\n\t\tgoto out_free_result;\n\n\tif (bflagsp)\n\t\t*bflagsp = bflags;\n\t/*\n\t * result contains valid SCSI INQUIRY data.\n\t */\n\tif ((result[0] >> 5) == 3) {\n\t\t/*\n\t\t * For a Peripheral qualifier 3 (011b), the SCSI\n\t\t * spec says: The device server is not capable of\n\t\t * supporting a physical device on this logical\n\t\t * unit.\n\t\t *\n\t\t * For disks, this implies that there is no\n\t\t * logical disk configured at sdev->lun, but there\n\t\t * is a target id responding.\n\t\t */\n\t\tSCSI_LOG_SCAN_BUS(2, sdev_printk(KERN_INFO, sdev, \"scsi scan:\"\n\t\t\t\t   \" peripheral qualifier of 3, device not\"\n\t\t\t\t   \" added\\n\"))\n\t\tif (lun == 0) {\n\t\t\tSCSI_LOG_SCAN_BUS(1, {\n\t\t\t\tunsigned char vend[9];\n\t\t\t\tunsigned char mod[17];\n\n\t\t\t\tsdev_printk(KERN_INFO, sdev,\n\t\t\t\t\t\"scsi scan: consider passing scsi_mod.\"\n\t\t\t\t\t\"dev_flags=%s:%s:0x240 or 0x1000240\\n\",\n\t\t\t\t\tscsi_inq_str(vend, result, 8, 16),\n\t\t\t\t\tscsi_inq_str(mod, result, 16, 32));\n\t\t\t});\n\n\t\t}\n\n\t\tres = SCSI_SCAN_TARGET_PRESENT;\n\t\tgoto out_free_result;\n\t}\n\n\t/*\n\t * Some targets may set slight variations of PQ and PDT to signal\n\t * that no LUN is present, so don't add sdev in these cases.\n\t * Two specific examples are:\n\t * 1) NetApp targets: return PQ=1, PDT=0x1f\n\t * 2) USB UFI: returns PDT=0x1f, with the PQ bits being \"reserved\"\n\t *    in the UFI 1.0 spec (we cannot rely on reserved bits).\n\t *\n\t * References:\n\t * 1) SCSI SPC-3, pp. 145-146\n\t * PQ=1: \"A peripheral device having the specified peripheral\n\t * device type is not connected to this logical unit. However, the\n\t * device server is capable of supporting the specified peripheral\n\t * device type on this logical unit.\"\n\t * PDT=0x1f: \"Unknown or no device type\"\n\t * 2) USB UFI 1.0, p. 20\n\t * PDT=00h Direct-access device (floppy)\n\t * PDT=1Fh none (no FDD connected to the requested logical unit)\n\t */\n\tif (((result[0] >> 5) == 1 || starget->pdt_1f_for_no_lun) &&\n\t    (result[0] & 0x1f) == 0x1f &&\n\t    !scsi_is_wlun(lun)) {\n\t\tSCSI_LOG_SCAN_BUS(3, sdev_printk(KERN_INFO, sdev,\n\t\t\t\t\t\"scsi scan: peripheral device type\"\n\t\t\t\t\t\" of 31, no device added\\n\"));\n\t\tres = SCSI_SCAN_TARGET_PRESENT;\n\t\tgoto out_free_result;\n\t}\n\n\tres = scsi_add_lun(sdev, result, &bflags, shost->async_scan);\n\tif (res == SCSI_SCAN_LUN_PRESENT) {\n\t\tif (bflags & BLIST_KEY) {\n\t\t\tsdev->lockable = 0;\n\t\t\tscsi_unlock_floptical(sdev, result);\n\t\t}\n\t}\n\n out_free_result:\n\tkfree(result);\n out_free_sdev:\n\tif (res == SCSI_SCAN_LUN_PRESENT) {\n\t\tif (sdevp) {\n\t\t\tif (scsi_device_get(sdev) == 0) {\n\t\t\t\t*sdevp = sdev;\n\t\t\t} else {\n\t\t\t\t__scsi_remove_device(sdev);\n\t\t\t\tres = SCSI_SCAN_NO_RESPONSE;\n\t\t\t}\n\t\t}\n\t} else\n\t\t__scsi_remove_device(sdev);\n out:\n\treturn res;\n}",
+      "lang": "cpp",
+      "title": "scsi_probe_and_add_lun",
+      "filePath": "drivers/scsi/scsi_scan.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1175,
+      "color": "blue"
+    },
+    {
+      "id": 43,
+      "x": -12562.954171241054,
+      "y": 1625.9557006330383,
+      "w": 679,
+      "h": 2932,
+      "code": "static int scsi_report_lun_scan(struct scsi_target *starget, blist_flags_t bflags,\n\t\t\t\tenum scsi_scan_mode rescan)\n{\n\tunsigned char scsi_cmd[MAX_COMMAND_SIZE];\n\tunsigned int length;\n\tu64 lun;\n\tunsigned int num_luns;\n\tint result;\n\tstruct scsi_lun *lunp, *lun_data;\n\tstruct scsi_device *sdev;\n\tstruct Scsi_Host *shost = dev_to_shost(&starget->dev);\n\tstruct scsi_failure failure_defs[] = {\n\t\t{\n\t\t\t.sense = UNIT_ATTENTION,\n\t\t\t.asc = SCMD_FAILURE_ASC_ANY,\n\t\t\t.ascq = SCMD_FAILURE_ASCQ_ANY,\n\t\t\t.result = SAM_STAT_CHECK_CONDITION,\n\t\t},\n\t\t/* Fail all CCs except the UA above */\n\t\t{\n\t\t\t.sense = SCMD_FAILURE_SENSE_ANY,\n\t\t\t.result = SAM_STAT_CHECK_CONDITION,\n\t\t},\n\t\t/* Retry any other errors not listed above */\n\t\t{\n\t\t\t.result = SCMD_FAILURE_RESULT_ANY,\n\t\t},\n\t\t{}\n\t};\n\tstruct scsi_failures failures = {\n\t\t.total_allowed = 3,\n\t\t.failure_definitions = failure_defs,\n\t};\n\tconst struct scsi_exec_args exec_args = {\n\t\t.failures = &failures,\n\t};\n\tint ret = 0;\n\n\t/*\n\t * Only support SCSI-3 and up devices if BLIST_NOREPORTLUN is not set.\n\t * Also allow SCSI-2 if BLIST_REPORTLUN2 is set and host adapter does\n\t * support more than 8 LUNs.\n\t * Don't attempt if the target doesn't support REPORT LUNS.\n\t */\n\tif (bflags & BLIST_NOREPORTLUN)\n\t\treturn 1;\n\tif (starget->scsi_level < SCSI_2 &&\n\t    starget->scsi_level != SCSI_UNKNOWN)\n\t\treturn 1;\n\tif (starget->scsi_level < SCSI_3 &&\n\t    (!(bflags & BLIST_REPORTLUN2) || shost->max_lun <= 8))\n\t\treturn 1;\n\tif (bflags & BLIST_NOLUN)\n\t\treturn 0;\n\tif (starget->no_report_luns)\n\t\treturn 1;\n\n\tif (!(sdev = scsi_device_lookup_by_target(starget, 0))) {\n\t\tsdev = scsi_alloc_sdev(starget, 0, NULL);\n\t\tif (!sdev)\n\t\t\treturn 0;\n\t\tif (scsi_device_get(sdev)) {\n\t\t\t__scsi_remove_device(sdev);\n\t\t\treturn 0;\n\t\t}\n\t}\n\n\t/*\n\t * Allocate enough to hold the header (the same size as one scsi_lun)\n\t * plus the number of luns we are requesting.  511 was the default\n\t * value of the now removed max_report_luns parameter.\n\t */\n\tlength = (511 + 1) * sizeof(struct scsi_lun);\nretry:\n\tlun_data = kmalloc(length, GFP_KERNEL);\n\tif (!lun_data) {\n\t\tprintk(ALLOC_FAILURE_MSG, __func__);\n\t\tgoto out;\n\t}\n\n\tscsi_cmd[0] = REPORT_LUNS;\n\n\t/*\n\t * bytes 1 - 5: reserved, set to zero.\n\t */\n\tmemset(&scsi_cmd[1], 0, 5);\n\n\t/*\n\t * bytes 6 - 9: length of the command.\n\t */\n\tput_unaligned_be32(length, &scsi_cmd[6]);\n\n\tscsi_cmd[10] = 0;\t/* reserved */\n\tscsi_cmd[11] = 0;\t/* control */\n\n\t/*\n\t * We can get a UNIT ATTENTION, for example a power on/reset, so\n\t * retry a few times (like sd.c does for TEST UNIT READY).\n\t * Experience shows some combinations of adapter/devices get at\n\t * least two power on/resets.\n\t *\n\t * Illegal requests (for devices that do not support REPORT LUNS)\n\t * should come through as a check condition, and will not generate\n\t * a retry.\n\t */\n\tscsi_failures_reset_retries(&failures);\n\n\tSCSI_LOG_SCAN_BUS(3, sdev_printk (KERN_INFO, sdev,\n\t\t\t  \"scsi scan: Sending REPORT LUNS\\n\"));\n\n\tresult = scsi_execute_cmd(sdev, scsi_cmd, REQ_OP_DRV_IN, lun_data,\n\t\t\t\t  length, SCSI_REPORT_LUNS_TIMEOUT, 3,\n\t\t\t\t  &exec_args);\n\n\tSCSI_LOG_SCAN_BUS(3, sdev_printk (KERN_INFO, sdev,\n\t\t\t  \"scsi scan: REPORT LUNS  %s result 0x%x\\n\",\n\t\t\t  result ?  \"failed\" : \"successful\", result));\n\tif (result) {\n\t\t/*\n\t\t * The device probably does not support a REPORT LUN command\n\t\t */\n\t\tret = 1;\n\t\tgoto out_err;\n\t}\n\n\t/*\n\t * Get the length from the first four bytes of lun_data.\n\t */\n\tif (get_unaligned_be32(lun_data->scsi_lun) +\n\t    sizeof(struct scsi_lun) > length) {\n\t\tlength = get_unaligned_be32(lun_data->scsi_lun) +\n\t\t\t sizeof(struct scsi_lun);\n\t\tkfree(lun_data);\n\t\tgoto retry;\n\t}\n\tlength = get_unaligned_be32(lun_data->scsi_lun);\n\n\tnum_luns = (length / sizeof(struct scsi_lun));\n\n\tSCSI_LOG_SCAN_BUS(3, sdev_printk (KERN_INFO, sdev,\n\t\t\"scsi scan: REPORT LUN scan\\n\"));\n\n\t/*\n\t * Scan the luns in lun_data. The entry at offset 0 is really\n\t * the header, so start at 1 and go up to and including num_luns.\n\t */\n\tfor (lunp = &lun_data[1]; lunp <= &lun_data[num_luns]; lunp++) {\n\t\tlun = scsilun_to_int(lunp);\n\n\t\tif (lun > sdev->host->max_lun) {\n\t\t\tsdev_printk(KERN_WARNING, sdev,\n\t\t\t\t    \"lun%llu has a LUN larger than\"\n\t\t\t\t    \" allowed by the host adapter\\n\", lun);\n\t\t} else {\n\t\t\tint res;\n\n\t\t\tres = scsi_probe_and_add_lun(starget,\n\t\t\t\tlun, NULL, NULL, rescan, NULL);\n\t\t\tif (res == SCSI_SCAN_NO_RESPONSE) {\n\t\t\t\t/*\n\t\t\t\t * Got some results, but now none, abort.\n\t\t\t\t */\n\t\t\t\tsdev_printk(KERN_ERR, sdev,\n\t\t\t\t\t\"Unexpected response\"\n\t\t\t\t\t\" from lun %llu while scanning, scan\"\n\t\t\t\t\t\" aborted\\n\", (unsigned long long)lun);\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}\n\t}\n\n out_err:\n\tkfree(lun_data);\n out:\n\tif (scsi_device_created(sdev))\n\t\t/*\n\t\t * the sdev we used didn't appear in the report luns scan\n\t\t */\n\t\t__scsi_remove_device(sdev);\n\tscsi_device_put(sdev);\n\treturn ret;\n}",
+      "lang": "cpp",
+      "title": "scsi_report_lun_scan",
+      "filePath": "drivers/scsi/scsi_scan.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1419,
+      "color": "blue"
+    },
+    {
+      "id": 44,
+      "x": -13435.297442168154,
+      "y": 1160.1438663078634,
+      "w": 626,
+      "h": 901,
+      "code": "static void __scsi_scan_target(struct device *parent, unsigned int channel,\n\t\tunsigned int id, u64 lun, enum scsi_scan_mode rescan)\n{\n\tstruct Scsi_Host *shost = dev_to_shost(parent);\n\tblist_flags_t bflags = 0;\n\tint res;\n\tstruct scsi_target *starget;\n\n\tif (shost->this_id == id)\n\t\t/*\n\t\t * Don't scan the host adapter\n\t\t */\n\t\treturn;\n\n\tstarget = scsi_alloc_target(parent, channel, id);\n\tif (!starget)\n\t\treturn;\n\tscsi_autopm_get_target(starget);\n\n\tif (lun != SCAN_WILD_CARD) {\n\t\t/*\n\t\t * Scan for a specific host/chan/id/lun.\n\t\t */\n\t\tscsi_probe_and_add_lun(starget, lun, NULL, NULL, rescan, NULL);\n\t\tgoto out_reap;\n\t}\n\n\t/*\n\t * Scan LUN 0, if there is some response, scan further. Ideally, we\n\t * would not configure LUN 0 until all LUNs are scanned.\n\t */\n\tres = scsi_probe_and_add_lun(starget, 0, &bflags, NULL, rescan, NULL);\n\tif (res == SCSI_SCAN_LUN_PRESENT || res == SCSI_SCAN_TARGET_PRESENT) {\n\t\tif (scsi_report_lun_scan(starget, bflags, rescan) != 0)\n\t\t\t/*\n\t\t\t * The REPORT LUN did not scan the target,\n\t\t\t * do a sequential scan.\n\t\t\t */\n\t\t\tscsi_sequential_lun_scan(starget, bflags,\n\t\t\t\t\t\t starget->scsi_level, rescan);\n\t}\n\n out_reap:\n\tscsi_autopm_put_target(starget);\n\t/*\n\t * paired with scsi_alloc_target(): determine if the target has\n\t * any children at all and if not, nuke it\n\t */\n\tscsi_target_reap(starget);\n\n\tput_device(&starget->dev);\n}",
+      "lang": "cpp",
+      "title": "__scsi_scan_target",
+      "filePath": "drivers/scsi/scsi_scan.c",
+      "showLineNumbers": true,
+      "lineNumberStart": 1698,
+      "color": "blue"
+    },
+    {
+      "id": 45,
+      "type": "bubble",
+      "x": -1864.2990877479635,
+      "y": 1134.0324939829945,
+      "w": 474.6932748988869,
+      "h": 118.7740008024419,
+      "text": "RQF_TIMED_OUTフラグを立てて、タイムアウト時の処理として.timeoutが定義されていればそれを呼びだし、タイマーを設定する。",
+      "tailX": -1158.1375898479173,
+      "tailY": 1029.0172397546003,
+      "color": "green",
+      "showTail": true
+    },
+    {
+      "id": 47,
+      "type": "bubble",
+      "x": -6641.9390404452215,
+      "y": 2183.6989307781196,
+      "w": 200,
+      "h": 100,
+      "text": "md",
+      "tailX": -6541.9390404452215,
+      "tailY": 2323.6989307781196,
+      "color": "red",
+      "showTail": false
+    },
+    {
+      "id": 50,
+      "type": "bubble",
+      "x": -6004.96462665295,
+      "y": 1618.3232957323264,
+      "w": 200,
+      "h": 100,
+      "text": "block layer",
+      "tailX": -5904.96462665295,
+      "tailY": 1758.3232957323264,
+      "color": "red",
+      "showTail": false
+    },
+    {
+      "id": 51,
+      "type": "bubble",
+      "x": -6886.819194234948,
+      "y": 1537.0650319724605,
+      "w": 200,
+      "h": 100,
+      "text": "SCSI layer",
+      "tailX": -6786.819194234948,
+      "tailY": 1677.0650319724605,
+      "color": "red",
+      "showTail": false
+    },
+    {
+      "id": 54,
+      "type": "bubble",
+      "x": -7542.757407018729,
+      "y": -805.967234461484,
+      "w": 200,
+      "h": 100,
+      "text": "Block SCSI Generic",
+      "tailX": -7442.757407018729,
+      "tailY": -665.967234461484,
+      "color": "red",
+      "showTail": false
+    },
+    {
+      "id": 55,
+      "type": "bubble",
+      "x": -8233.29548369649,
+      "y": -4284.26398335102,
+      "w": 200,
+      "h": 100,
+      "text": "NVMe",
+      "tailX": -8163.295483696489,
+      "tailY": -4174.26398335102,
+      "color": "red",
+      "showTail": false
+    },
+    {
+      "id": 56,
+      "type": "bubble",
+      "x": -1841.7855888932536,
+      "y": -661.9705975510449,
+      "w": 200,
+      "h": 100,
+      "text": "こちら側が本題の調査ログ",
+      "tailX": -1741.7855888932536,
+      "tailY": -521.9705975510449,
+      "color": "red",
+      "showTail": false
+    },
+    {
+      "id": 57,
+      "type": "bubble",
+      "x": -2462.2794174714577,
+      "y": -681.4233447528967,
+      "w": 437.11958273708416,
+      "h": 126.62840233945865,
+      "text": "こちら側は本題とは直接関係はしないけど、Linuxのblockレイヤーがどこから呼ばれているのかの概観を掴みたくてざっと呼び出し関係をたどってみた記録",
+      "tailX": -2362.2794174714577,
+      "tailY": -541.4233447528967,
+      "color": "red",
+      "showTail": false
+    },
+    {
+      "id": 58,
+      "type": "bubble",
+      "x": -1700.3147140106935,
+      "y": 340.70121247157573,
+      "w": 200,
+      "h": 100,
+      "text": "/sys関連の処理",
+      "tailX": -1533.6176058967553,
+      "tailY": 480.6187952622185,
+      "color": "green",
+      "showTail": true
+    },
+    {
+      "id": 59,
+      "type": "frame",
+      "x": -1892.2990877479635,
+      "y": 288.70121247157573,
+      "w": 1138.6531113418623,
+      "h": 992.1052823138607,
+      "label": "根拠その3: block/blk-*.cで 'time.*out' でgrepしてひっかかった関数を念のため調べてる",
+      "color": "yellow"
+    },
+    {
+      "id": 60,
+      "type": "bubble",
+      "x": -1660.7905017950263,
+      "y": 817.1228435976261,
+      "w": 413.4307459646027,
+      "h": 100,
+      "text": "block/blk-*.cで'time.*out'でgrepしてひっかかる関数はこの2つ",
+      "tailX": -1560.7905017950263,
+      "tailY": 957.1228435976261,
+      "color": "cyan",
+      "showTail": false
     }
   ],
   "links": [
@@ -170,14 +679,270 @@
       "fromId": 5,
       "text": "blk_mq_ops",
       "toId": 6
+    },
+    {
+      "id": 4,
+      "fromId": 18,
+      "text": "mq_ops->timeout",
+      "toId": 6
+    },
+    {
+      "id": 5,
+      "fromId": 17,
+      "text": "mq_ops->timeout",
+      "toId": 6
+    },
+    {
+      "id": 6,
+      "fromId": 21,
+      "text": "blk_mq_req_expired",
+      "toId": 22
+    },
+    {
+      "id": 7,
+      "fromId": 21,
+      "text": "blk_mq_rq_timed_out",
+      "toId": 18
+    },
+    {
+      "id": 8,
+      "fromId": 23,
+      "text": "blk_mq_handle_expired",
+      "toId": 21
+    },
+    {
+      "id": 9,
+      "fromId": 24,
+      "text": "blk_mq_timeout_work",
+      "toId": 23
+    },
+    {
+      "id": 10,
+      "fromId": 25,
+      "text": "blk_mq_init_allocated_queue",
+      "toId": 24
+    },
+    {
+      "id": 11,
+      "fromId": 26,
+      "text": "blk_mq_alloc_queue",
+      "toId": 25
+    },
+    {
+      "id": 12,
+      "fromId": 27,
+      "text": "blk_mq_alloc_queue",
+      "toId": 25
+    },
+    {
+      "id": 13,
+      "fromId": 28,
+      "text": "blk_mq_alloc_queue",
+      "toId": 25
+    },
+    {
+      "id": 14,
+      "fromId": 29,
+      "text": "blk_mq_alloc_queue",
+      "toId": 25
+    },
+    {
+      "id": 15,
+      "fromId": 30,
+      "text": "blk_mq_init_allocated_queue",
+      "toId": 24
+    },
+    {
+      "id": 16,
+      "fromId": 31,
+      "text": "bsg_setup_queue",
+      "toId": 29
+    },
+    {
+      "id": 17,
+      "fromId": 32,
+      "text": "bsg_setup_queue",
+      "toId": 29
+    },
+    {
+      "id": 18,
+      "fromId": 33,
+      "text": "bsg_setup_queue",
+      "toId": 29
+    },
+    {
+      "id": 19,
+      "fromId": 34,
+      "text": "bsg_setup_queue",
+      "toId": 29
+    },
+    {
+      "id": 20,
+      "fromId": 35,
+      "text": "dm_mq_init_request_queue",
+      "toId": 30
+    },
+    {
+      "id": 21,
+      "fromId": 36,
+      "text": "dm_setup_md_queue",
+      "toId": 35
+    },
+    {
+      "id": 22,
+      "fromId": 37,
+      "text": "dm_setup_md_queue",
+      "toId": 35
+    },
+    {
+      "id": 23,
+      "fromId": 38,
+      "text": "nvme_alloc_admin_tag_set",
+      "toId": 26
+    },
+    {
+      "id": 24,
+      "fromId": 38,
+      "text": "nvme_alloc_io_tag_set",
+      "toId": 27
+    },
+    {
+      "id": 25,
+      "fromId": 39,
+      "text": "nvme_alloc_io_tag_set",
+      "toId": 27
+    },
+    {
+      "id": 26,
+      "fromId": 40,
+      "text": "nvme_pci_update_nr_queues",
+      "toId": 39
+    },
+    {
+      "id": 27,
+      "fromId": 41,
+      "text": "nvme_reset_work",
+      "toId": 40
+    },
+    {
+      "id": 28,
+      "fromId": 38,
+      "text": "nvme_pci_alloc_dev",
+      "toId": 41
+    },
+    {
+      "id": 29,
+      "fromId": 42,
+      "text": "scsi_alloc_sdev",
+      "toId": 28
+    },
+    {
+      "id": 30,
+      "fromId": 43,
+      "text": "scsi_alloc_sdev",
+      "toId": 28
+    },
+    {
+      "id": 31,
+      "fromId": 44,
+      "text": "scsi_report_lun_scan",
+      "toId": 43
     }
   ],
-  "nid": 17,
-  "lid": 4,
+  "freeLines": [
+    {
+      "id": 5,
+      "points": [
+        {
+          "x": -8215.634910096194,
+          "y": -5264.044894606062
+        },
+        {
+          "x": -5665.6349100961925,
+          "y": 4648.455105393938
+        }
+      ],
+      "lineStyle": "polyline",
+      "stroke": "#8b949e",
+      "strokeWidth": 5,
+      "dash": "8 4"
+    },
+    {
+      "id": 6,
+      "points": [
+        {
+          "x": -14071.347716375667,
+          "y": -3862.9234444039976
+        },
+        {
+          "x": -7997.141413481858,
+          "y": -4142.2473694175205
+        }
+      ],
+      "lineStyle": "polyline",
+      "stroke": "#8b949e",
+      "strokeWidth": 5,
+      "dash": "8 4"
+    },
+    {
+      "id": 7,
+      "points": [
+        {
+          "x": -13892.172343217724,
+          "y": -405.4044968743569
+        },
+        {
+          "x": -7069.79639579811,
+          "y": -611.022864494428
+        }
+      ],
+      "lineStyle": "polyline",
+      "stroke": "#8b949e",
+      "strokeWidth": 5,
+      "dash": "8 4"
+    },
+    {
+      "id": 8,
+      "points": [
+        {
+          "x": -14076.542333193502,
+          "y": 5860.901995799665
+        },
+        {
+          "x": -6437.461268401573,
+          "y": 1815.36965688502
+        }
+      ],
+      "lineStyle": "polyline",
+      "stroke": "#8b949e",
+      "strokeWidth": 5,
+      "dash": "8 4"
+    },
+    {
+      "id": 9,
+      "points": [
+        {
+          "x": -1941.4623906067666,
+          "y": -738.1607476027773
+        },
+        {
+          "x": -1944.4224142264443,
+          "y": 2544.505446619813
+        }
+      ],
+      "lineStyle": "polyline",
+      "stroke": "#8b949e",
+      "strokeWidth": 5,
+      "dash": ""
+    }
+  ],
+  "nid": 61,
+  "lid": 32,
+  "flid": 10,
   "vp": {
-    "x": 759.9816965927253,
-    "y": 281.07969252740736,
-    "scale": 0.396151437421493
+    "x": 1830.5477933333527,
+    "y": 534.7596722442827,
+    "scale": 0.6512219950947192
   },
   "gitConfig": {
     "url": "",
