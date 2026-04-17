@@ -9733,3 +9733,138 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
 ✻ Baked for 48s
 ```
+
+```
+❯ Bubbleのヘッダに "Tail" というチェックボックスを作ってください。チェックが入っている場合は尻尾を表示し、チェックがない場合は尻尾を表示しないようにしま
+す。デフォルトではチェックが入れます
+
+  Searched for 3 patterns, read 1 file (ctrl+o to expand)
+
+⏺ 変更箇所は4か所です。実装します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      747      text: '',
+      748      tailX: x + 100, tailY: y + 140,
+      749      color: 'green',
+      750 +    showTail: true,
+      751    };
+      752    S.nodes.push(n);
+      753    const el = document.createElement('div');
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 2 lines
+      1840      canvasTitle: canvasTitleEl.value,
+      1841      nodes: S.nodes.map(n => {
+      1842        if (n.type === 'bubble') {
+      1843 -        const { id, type, x, y, w, h, text, tailX, tailY, color } = n;
+      1844 -        return { id, type, x, y, w, h, text, tailX, tailY, color };
+      1843 +        const { id, type, x, y, w, h, text, tailX, tailY, color, showTail } = n;
+      1844 +        return { id, type, x, y, w, h, text, tailX, tailY, color, showTail };
+      1845        }
+      1846        if (n.type === 'frame') {
+      1847          const { id, type, x, y, w, h, label, color } = n;
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      1895      if (nd.type === 'bubble') {
+      1896        n = { id: nd.id, type: 'bubble', x: nd.x, y: nd.y, w: nd.w, h: nd.h,
+      1897              text: nd.text ?? '', tailX: nd.tailX ?? nd.x + nd.w / 2, tailY: nd.tailY ?? nd.y + nd.h + 50,
+      1898 -            color: nd.color ?? 'green' };
+      1898 +            color: nd.color ?? 'green', showTail: nd.showTail ?? true };
+      1899      } else if (nd.type === 'frame') {
+      1900        n = { id: nd.id, type: 'frame', x: nd.x, y: nd.y, w: nd.w, h: nd.h,
+      1901              label: nd.label ?? '', color: nd.color ?? 'blue' };
+
+⏺ 次に renderBubbleTail でフラグをチェック、bubbleViewHTML にチェックボックスを追加、renderBubbleContent でイベントを接続します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 8 lines, removed 1 line
+      661    const el = ndEl(n.id);
+      662    if (!el) return;
+      663
+      664 +  // Remove existing SVG and bail if tail is hidden
+      665 +  const existing = el.querySelector('.bubble-tail-svg');
+      666 +  if (n.showTail === false) {
+      667 +    if (existing) existing.remove();
+      668 +    return;
+      669 +  }
+      670 +
+      671    // Find or create the inline SVG inside the bubble div
+      665 -  let svg = el.querySelector('.bubble-tail-svg');
+      672 +  let svg = existing;
+      673    if (!svg) {
+      674      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      675      svg.setAttribute('class', 'bubble-tail-svg');
+
+⏺ 次にヘッダのHTMLにチェックボックスを追加します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines
+      588    const body = n.text
+      589      ? `<div class="bubble-text">${esc(n.text).replace(/\n/g, '<br>')}</div>`
+      590      : `<div class="bubble-text empty">Enter text…</div>`;
+      591 +  const tailChecked = n.showTail !== false ? 'checked' : '';
+      592    return `
+      593    <div class="bubble-header">
+      594      <div class="node-actions">
+      595 +      <label class="bubble-tail-toggle"><input type="checkbox" class="chk-show-tail" ${tailChecked}> Tail</label>
+      596        <button class="node-btn btn-edit">Edit</button>
+      597        <button class="node-btn danger btn-del">✕</button>
+      598      </div>
+
+⏺ 次にイベントリスナーを renderBubbleContent の view モード側に追加します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 8 lines
+      655      el.querySelector('.btn-edit').addEventListener('click', e => { e.stopPropagation(); startEdit(n.id); });
+      656      el.querySelector('.btn-del').addEventListener('click', e => { e.stopPropagation(); removeNode(n.id); });
+      657      el.querySelector('.bubble-body').addEventListener('dblclick', e => { e.stopPropagation(); startEdit(n.id); });
+      658 +    const chk = el.querySelector('.chk-show-tail');
+      659 +    chk.addEventListener('mousedown', e => e.stopPropagation());
+      660 +    chk.addEventListener('change', e => {
+      661 +      e.stopPropagation();
+      662 +      n.showTail = chk.checked;
+      663 +      renderBubbleTail(n);
+      664 +      scheduleSave();
+      665 +    });
+      666    }
+      667  }
+      668
+
+⏺ 最後にCSSでチェックボックスラベルのスタイルを追加します。
+
+⏺ Update(canvas.css)
+  ⎿  Added 7 lines
+      501  }
+      502  .bubble-node:hover .bubble-header .node-actions,
+      503  .bubble-node.is-editing .bubble-header .node-actions { opacity: 1; }
+      504 +.bubble-tail-toggle {
+      505 +  display: flex; align-items: center; gap: 4px;
+      506 +  font-size: 11px; color: #8b949e;
+      507 +  cursor: pointer; user-select: none;
+      508 +  margin-right: 4px;
+      509 +}
+      510 +.bubble-tail-toggle input { cursor: pointer; }
+      511  .bubble-body {
+      512    flex: 1; padding: 10px 14px 14px;
+      513    overflow: auto;
+
+⏺ テストを実行して確認します。
+
+⏺ Bash(npm test 2>&1 | tail -20)
+  ⎿  > test
+     > vitest run
+     … +10 lines (ctrl+o to expand)
+
+⏺ 全テストパスです。変更内容：
+
+  - addBubble: showTail: true をデフォルト値として追加
+  - saveState / loadState: showTail フィールドを保存・復元（既存データは ?? true でデフォルトon）
+  - renderBubbleTail: n.showTail === false のとき SVG を削除して早期リターン
+  - bubbleViewHTML: ヘッダーに "Tail" チェックボックスを追加
+  - renderBubbleContent: チェックボックスの change イベントで n.showTail を更新し renderBubbleTail を再呼び出し
+  - CSS: チェックボックスラベルのスタイル追加
+
+✻ Worked for 1m 10s
+```

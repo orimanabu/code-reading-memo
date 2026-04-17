@@ -501,6 +501,13 @@ body.link-mode .node:hover {
 }
 .bubble-node:hover .bubble-header .node-actions,
 .bubble-node.is-editing .bubble-header .node-actions { opacity: 1; }
+.bubble-tail-toggle {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; color: #8b949e;
+  cursor: pointer; user-select: none;
+  margin-right: 4px;
+}
+.bubble-tail-toggle input { cursor: pointer; }
 .bubble-body {
   flex: 1; padding: 10px 14px 14px;
   overflow: auto;

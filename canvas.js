@@ -588,9 +588,11 @@ function bubbleViewHTML(n) {
   const body = n.text
     ? `<div class="bubble-text">${esc(n.text).replace(/\n/g, '<br>')}</div>`
     : `<div class="bubble-text empty">Enter text…</div>`;
+  const tailChecked = n.showTail !== false ? 'checked' : '';
   return `
   <div class="bubble-header">
     <div class="node-actions">
+      <label class="bubble-tail-toggle"><input type="checkbox" class="chk-show-tail" ${tailChecked}> Tail</label>
       <button class="node-btn btn-edit">Edit</button>
       <button class="node-btn danger btn-del">✕</button>
     </div>
@@ -653,6 +655,14 @@ function renderBubbleContent(n, el) {
     el.querySelector('.btn-edit').addEventListener('click', e => { e.stopPropagation(); startEdit(n.id); });
     el.querySelector('.btn-del').addEventListener('click', e => { e.stopPropagation(); removeNode(n.id); });
     el.querySelector('.bubble-body').addEventListener('dblclick', e => { e.stopPropagation(); startEdit(n.id); });
+    const chk = el.querySelector('.chk-show-tail');
+    chk.addEventListener('mousedown', e => e.stopPropagation());
+    chk.addEventListener('change', e => {
+      e.stopPropagation();
+      n.showTail = chk.checked;
+      renderBubbleTail(n);
+      scheduleSave();
+    });
   }
 }
 
@@ -661,8 +671,15 @@ function renderBubbleTail(n) {
   const el = ndEl(n.id);
   if (!el) return;
 
+  // Remove existing SVG and bail if tail is hidden
+  const existing = el.querySelector('.bubble-tail-svg');
+  if (n.showTail === false) {
+    if (existing) existing.remove();
+    return;
+  }
+
   // Find or create the inline SVG inside the bubble div
-  let svg = el.querySelector('.bubble-tail-svg');
+  let svg = existing;
   if (!svg) {
     svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'bubble-tail-svg');
@@ -747,6 +764,7 @@ function addBubble(x, y) {
     text: '',
     tailX: x + 100, tailY: y + 140,
     color: 'green',
+    showTail: true,
   };
   S.nodes.push(n);
   const el = document.createElement('div');
@@ -1839,8 +1857,8 @@ function saveState() {
     canvasTitle: canvasTitleEl.value,
     nodes: S.nodes.map(n => {
       if (n.type === 'bubble') {
-        const { id, type, x, y, w, h, text, tailX, tailY, color } = n;
-        return { id, type, x, y, w, h, text, tailX, tailY, color };
+        const { id, type, x, y, w, h, text, tailX, tailY, color, showTail } = n;
+        return { id, type, x, y, w, h, text, tailX, tailY, color, showTail };
       }
       if (n.type === 'frame') {
         const { id, type, x, y, w, h, label, color } = n;
@@ -1894,7 +1912,7 @@ function loadState(data) {
     if (nd.type === 'bubble') {
       n = { id: nd.id, type: 'bubble', x: nd.x, y: nd.y, w: nd.w, h: nd.h,
             text: nd.text ?? '', tailX: nd.tailX ?? nd.x + nd.w / 2, tailY: nd.tailY ?? nd.y + nd.h + 50,
-            color: nd.color ?? 'green' };
+            color: nd.color ?? 'green', showTail: nd.showTail ?? true };
     } else if (nd.type === 'frame') {
       n = { id: nd.id, type: 'frame', x: nd.x, y: nd.y, w: nd.w, h: nd.h,
             label: nd.label ?? '', color: nd.color ?? 'blue' };
