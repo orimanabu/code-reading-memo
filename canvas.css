@@ -336,6 +336,44 @@ body {
 }
 #link-ctx button#link-ctx-del:hover { background: #da3633; color: #fff; }
 
+/* ── Free lines ── */
+body.line-draw-mode,
+body.line-draw-mode * { cursor: crosshair !important; }
+#btn-add-line.active { background: #1f3a5f; border-color: #388bfd; color: #58a6ff; }
+.fl { pointer-events: none; }
+.fl-path { fill: none; opacity: 0.85; }
+.fl-hit {
+  fill: none; stroke: transparent; stroke-width: 14;
+  cursor: pointer; pointer-events: stroke;
+}
+.fl:hover .fl-path { opacity: 1; }
+.fl-pt-handle { pointer-events: none; } /* overridden inline when selected */
+
+/* ── Line context menu ── */
+#line-ctx {
+  position: fixed; z-index: 310;
+  background: #161b22; border: 1px solid #30363d;
+  border-radius: 6px; padding: 8px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+  display: none; min-width: 210px;
+}
+#line-ctx-colors, #line-ctx-widths, #line-ctx-dashes { display: flex; gap: 4px; flex-wrap: wrap; }
+#line-ctx-shapes { display: flex; gap: 4px; }
+.fl-shape-btn {
+  background: #21262d; border: 1px solid #30363d;
+  border-radius: 4px; cursor: pointer; color: #c9d1d9;
+  padding: 3px 10px; font-size: 11px;
+}
+.fl-shape-btn:hover { border-color: #58a6ff; }
+.fl-shape-btn.active { border-color: #388bfd; background: #1f3a5f; color: #58a6ff; }
+#line-ctx button#line-ctx-del {
+  display: block; width: 100%;
+  background: none; border: none; color: #e6edf3;
+  padding: 6px 10px; font-size: 13px; text-align: left;
+  border-radius: 4px; cursor: pointer; white-space: nowrap;
+}
+#line-ctx button#line-ctx-del:hover { background: #da3633; color: #fff; }
+
 /* ── Toolbar ── */
 #toolbar {
   position: fixed; top: 14px; left: 50%; transform: translateX(-50%);

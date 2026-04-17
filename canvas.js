@@ -240,6 +240,13 @@ const S = {
   gitConfig: { url: '', branch: '', tag: '', commitHash: '' },
   tailDrag: null,   // { id } — bubble tail being dragged
   marquee: null,    // { sx, sy, ex, ey } — rubber-band selection in screen coords
+  freeLines: [],    // standalone line objects
+  flid: 1,          // next free-line id
+  lineDrawMode: false,
+  drawingLine: null, // { points: [{x,y}...], cursorPt: {x,y} } — line being drawn
+  selLine: null,    // selected free-line id
+  lineDrag: null,   // { id, sx, sy, origPoints } — line being dragged
+  ptDrag: null,     // { lineId, ptIndex, sx, sy, origPt } — single point being dragged
 };
 
 // ═══════════════════════════════════════════════════════
@@ -293,6 +300,7 @@ function applyVP() {
   wrap.style.backgroundSize = `${gs}px ${gs}px`;
   wrap.style.backgroundPosition = `${x % gs}px ${y % gs}px`;
   renderLinks();
+  renderFreeLines();
   const zi = document.getElementById('zoom-input');
   if (zi && document.activeElement !== zi) zi.value = Math.round(scale * 100) + '%';
 }
@@ -1116,6 +1124,10 @@ function autoFitNode(n) {
 }
 
 function selectNode(id) {
+  if (S.selLine !== null) {
+    S.selLine = null;
+    renderFreeLines();
+  }
   const prev = S.sel;
   S.sel = id;
   // only update CSS class — do NOT rebuild innerHTML here
@@ -1558,6 +1570,306 @@ document.addEventListener('mousedown', e => {
 });
 
 // ═══════════════════════════════════════════════════════
+// FREE LINES
+// ═══════════════════════════════════════════════════════
+
+function catmullRomSvg(sPts) {
+  if (sPts.length === 2) {
+    return `M${sPts[0].x},${sPts[0].y} L${sPts[1].x},${sPts[1].y}`;
+  }
+  const pts = [sPts[0], ...sPts, sPts[sPts.length - 1]];
+  let d = `M${sPts[0].x},${sPts[0].y}`;
+  for (let i = 1; i < pts.length - 2; i++) {
+    const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
+
+function freeLinePathD(line, extraPt) {
+  const cPts = extraPt ? [...line.points, extraPt] : line.points;
+  if (cPts.length < 2) return null;
+  const sPts = cPts.map(p => c2s(p.x, p.y));
+  if (line.lineStyle === 'straight') {
+    const a = sPts[0], b = sPts[sPts.length - 1];
+    return `M${a.x},${a.y} L${b.x},${b.y}`;
+  }
+  if (line.lineStyle === 'curve') return catmullRomSvg(sPts);
+  return `M${sPts[0].x},${sPts[0].y}` + sPts.slice(1).map(p => ` L${p.x},${p.y}`).join('');
+}
+
+function renderFreeLines() {
+  const freeLayer = document.getElementById('free-lines-layer');
+  if (!freeLayer) return;
+  while (freeLayer.firstChild) freeLayer.removeChild(freeLayer.firstChild);
+
+  for (const line of S.freeLines) {
+    const d = freeLinePathD(line, null);
+    if (!d) continue;
+    const isSelected = S.selLine === line.id;
+    const stroke = line.stroke || '#e6edf3';
+    const sw = line.strokeWidth || 2;
+    const dash = line.dash || '';
+
+    const g = svgE('g', { class: 'fl' });
+
+    const path = svgE('path', { d, class: 'fl-path', fill: 'none' });
+    path.style.stroke = isSelected ? '#58a6ff' : stroke;
+    path.style.strokeWidth = sw + 'px';
+    if (dash) path.style.strokeDasharray = dash;
+    if (isSelected) path.style.filter = 'drop-shadow(0 0 5px #388bfd99)';
+    g.appendChild(path);
+
+    // Hit path for whole-line drag (rendered before point handles so handles are on top)
+    const hit = svgE('path', { d, class: 'fl-hit', fill: 'none' });
+    hit.addEventListener('click', e => {
+      e.stopPropagation();
+      selectFreeLine(line.id);
+    });
+    hit.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      selectFreeLine(line.id);
+      showLineCtx(line.id, e.clientX, e.clientY);
+    });
+    hit.addEventListener('mousedown', e => {
+      if (e.button !== 0 || S.lineDrawMode) return;
+      e.stopPropagation();
+      selectFreeLine(line.id);
+      S.lineDrag = {
+        id: line.id,
+        sx: e.clientX, sy: e.clientY,
+        origPoints: line.points.map(p => ({ ...p })),
+      };
+    });
+    g.appendChild(hit);
+
+    // Point handles rendered on top — each intercepts drag for individual point movement
+    if (isSelected) {
+      for (let i = 0; i < line.points.length; i++) {
+        const p = line.points[i];
+        const sp = c2s(p.x, p.y);
+        const circ = svgE('circle', {
+          cx: sp.x, cy: sp.y, r: '6',
+          fill: '#388bfd', stroke: '#0d1117', 'stroke-width': '1.5',
+          class: 'fl-pt-handle',
+        });
+        circ.style.pointerEvents = 'all';
+        circ.style.cursor = 'move';
+        circ.addEventListener('mousedown', e => {
+          if (e.button !== 0 || S.lineDrawMode) return;
+          e.stopPropagation();
+          S.ptDrag = { lineId: line.id, ptIndex: i, sx: e.clientX, sy: e.clientY, origPt: { ...p } };
+        });
+        g.appendChild(circ);
+      }
+    }
+
+    freeLayer.appendChild(g);
+  }
+
+  if (S.drawingLine) {
+    const dl = S.drawingLine;
+    if (dl.points.length > 0) {
+      const drawG = svgE('g', { class: 'fl' });
+
+      if (dl.points.length >= 2) {
+        const placedD = freeLinePathD({ points: dl.points, lineStyle: 'polyline' }, null);
+        if (placedD) {
+          const placed = svgE('path', { d: placedD, fill: 'none' });
+          placed.style.stroke = '#e6edf3';
+          placed.style.strokeWidth = '2px';
+          placed.style.opacity = '0.9';
+          drawG.appendChild(placed);
+        }
+      }
+
+      if (dl.cursorPt && dl.points.length >= 1) {
+        const lastSp = c2s(dl.points[dl.points.length - 1].x, dl.points[dl.points.length - 1].y);
+        const curSp  = c2s(dl.cursorPt.x, dl.cursorPt.y);
+        const preview = svgE('path', {
+          d: `M${lastSp.x},${lastSp.y} L${curSp.x},${curSp.y}`, fill: 'none',
+        });
+        preview.style.stroke = '#e6edf3';
+        preview.style.strokeWidth = '1.5px';
+        preview.style.strokeDasharray = '6 4';
+        preview.style.opacity = '0.55';
+        drawG.appendChild(preview);
+      }
+
+      for (const p of dl.points) {
+        const sp = c2s(p.x, p.y);
+        drawG.appendChild(svgE('circle', {
+          cx: sp.x, cy: sp.y, r: '4',
+          fill: '#e6edf3', stroke: '#0d1117', 'stroke-width': '1.5',
+        }));
+      }
+
+      freeLayer.appendChild(drawG);
+    }
+  }
+}
+
+function selectFreeLine(id) {
+  if (S.selLine === id) return;
+  if (S.sel !== null) { ndEl(S.sel)?.classList.remove('selected'); S.sel = null; }
+  clearMultiSel();
+  S.selLine = id;
+  renderFreeLines();
+  setStatus('Line selected — drag to move | right-click for options | Del to delete');
+}
+
+function addFreeLine(points, lineStyle, stroke, strokeWidth, dash) {
+  const line = {
+    id: S.flid++,
+    points: points.map(p => ({ x: p.x, y: p.y })),
+    lineStyle: lineStyle || 'polyline',
+    stroke: stroke || '#e6edf3',
+    strokeWidth: strokeWidth || 2,
+    dash: dash || '',
+  };
+  S.freeLines.push(line);
+  renderFreeLines();
+  selectFreeLine(line.id);
+  scheduleSave();
+  return line;
+}
+
+function removeFreeLine(id) {
+  S.freeLines = S.freeLines.filter(l => l.id !== id);
+  if (S.selLine === id) S.selLine = null;
+  renderFreeLines();
+  scheduleSave();
+}
+
+function enterLineDrawMode() {
+  S.lineDrawMode = true;
+  S.drawingLine = null;
+  document.body.classList.add('line-draw-mode');
+  selectNode(null);
+  setStatus('Line draw: click to add points, double-click or Enter to finish, Esc to cancel');
+  document.getElementById('btn-add-line').classList.add('active');
+}
+
+function exitLineDrawMode() {
+  S.lineDrawMode = false;
+  S.drawingLine = null;
+  document.body.classList.remove('line-draw-mode');
+  renderFreeLines();
+  document.getElementById('btn-add-line').classList.remove('active');
+  setStatus('Ready — double-click to add block | select text to create link | right-click link to delete');
+}
+
+function finishDrawingLine() {
+  const dl = S.drawingLine;
+  if (!dl || dl.points.length < 2) { exitLineDrawMode(); return; }
+  addFreeLine(dl.points, 'polyline', '#e6edf3', 2, '');
+  exitLineDrawMode();
+}
+
+function showLineCtx(lineId, x, y) {
+  const line = S.freeLines.find(l => l.id === lineId);
+  if (!line) return;
+
+  const lineCtxEl     = document.getElementById('line-ctx');
+  const lineCtxColors = document.getElementById('line-ctx-colors');
+  const lineCtxWidths = document.getElementById('line-ctx-widths');
+  const lineCtxDashes = document.getElementById('line-ctx-dashes');
+  const lineCtxShapes = document.getElementById('line-ctx-shapes');
+  const lineCtxDel    = document.getElementById('line-ctx-del');
+
+  const curStroke = line.stroke || '#e6edf3';
+  const curWidth  = line.strokeWidth || 2;
+  const curDash   = line.dash || '';
+  const curShape  = line.lineStyle || 'polyline';
+
+  lineCtxColors.innerHTML = '';
+  for (const c of LINK_COLORS) {
+    const sw = document.createElement('div');
+    sw.className = 'lk-color-swatch' + (curStroke === c.value ? ' active' : '');
+    sw.style.background = c.value;
+    sw.title = c.label;
+    sw.addEventListener('click', () => {
+      line.stroke = c.value;
+      renderFreeLines(); scheduleSave();
+      lineCtxColors.querySelectorAll('.lk-color-swatch').forEach(el => el.classList.remove('active'));
+      sw.classList.add('active');
+      showLineCtx(lineId, x, y);
+    });
+    lineCtxColors.appendChild(sw);
+  }
+
+  lineCtxWidths.innerHTML = '';
+  for (const w of LINK_WIDTHS) {
+    const btn = document.createElement('button');
+    btn.className = 'lk-width-btn' + (curWidth === w.value ? ' active' : '');
+    btn.innerHTML = makeWidthSvg(Math.min(w.value, 5), curStroke);
+    btn.title = `${w.value}px`;
+    btn.addEventListener('click', () => {
+      line.strokeWidth = w.value;
+      renderFreeLines(); scheduleSave();
+      lineCtxWidths.querySelectorAll('.lk-width-btn').forEach(el => el.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    lineCtxWidths.appendChild(btn);
+  }
+
+  lineCtxDashes.innerHTML = '';
+  for (const d of LINK_DASHES) {
+    const btn = document.createElement('button');
+    btn.className = 'lk-dash-btn' + (curDash === d.value ? ' active' : '');
+    btn.innerHTML = makeDashSvg(d.value, curStroke);
+    btn.title = d.title;
+    btn.addEventListener('click', () => {
+      line.dash = d.value;
+      renderFreeLines(); scheduleSave();
+      lineCtxDashes.querySelectorAll('.lk-dash-btn').forEach(el => el.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    lineCtxDashes.appendChild(btn);
+  }
+
+  lineCtxShapes.innerHTML = '';
+  const SHAPES = [
+    { label: 'Straight', value: 'straight' },
+    { label: 'Polyline', value: 'polyline' },
+    { label: 'Curve',    value: 'curve'    },
+  ];
+  for (const sh of SHAPES) {
+    const btn = document.createElement('button');
+    btn.className = 'fl-shape-btn' + (curShape === sh.value ? ' active' : '');
+    btn.textContent = sh.label;
+    btn.addEventListener('click', () => {
+      line.lineStyle = sh.value;
+      renderFreeLines(); scheduleSave();
+      lineCtxShapes.querySelectorAll('.fl-shape-btn').forEach(el => el.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    lineCtxShapes.appendChild(btn);
+  }
+
+  lineCtxDel.onclick = () => { hideLineCtx(); removeFreeLine(lineId); };
+
+  lineCtxEl.style.display = 'block';
+  const cw = lineCtxEl.offsetWidth || 220;
+  const ch = lineCtxEl.offsetHeight || 200;
+  lineCtxEl.style.left = Math.min(x, window.innerWidth  - cw - 8) + 'px';
+  lineCtxEl.style.top  = Math.min(y, window.innerHeight - ch - 8) + 'px';
+}
+
+function hideLineCtx() {
+  document.getElementById('line-ctx').style.display = 'none';
+}
+
+document.addEventListener('mousedown', e => {
+  if (!e.target.closest('#line-ctx')) hideLineCtx();
+});
+
+// ═══════════════════════════════════════════════════════
 // LINK PREVIEW (link-mode hover)
 // ═══════════════════════════════════════════════════════
 wrap.addEventListener('mousemove', e => {
@@ -1702,7 +2014,57 @@ wrap.addEventListener('dblclick', e => {
   addNode(p.x - 215, p.y - 135);
 });
 
+// Capture-phase handlers for line draw mode (intercept before node handlers)
+wrap.addEventListener('mousedown', e => {
+  if (!S.lineDrawMode || e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const p = s2c(e.clientX, e.clientY);
+  if (!S.drawingLine) {
+    S.drawingLine = { points: [p], cursorPt: p };
+  } else {
+    S.drawingLine.points.push(p);
+  }
+  renderFreeLines();
+}, true);
+
+wrap.addEventListener('dblclick', e => {
+  if (!S.lineDrawMode) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (!S.drawingLine) { exitLineDrawMode(); return; }
+  // Pop duplicate point added by the 2nd mousedown of the double-click
+  if (S.drawingLine.points.length > 1) S.drawingLine.points.pop();
+  finishDrawingLine();
+}, true);
+
 document.addEventListener('mousemove', e => {
+  if (S.lineDrawMode && S.drawingLine) {
+    S.drawingLine.cursorPt = s2c(e.clientX, e.clientY);
+    renderFreeLines();
+  }
+  if (S.ptDrag) {
+    const r = 1 / S.vp.scale;
+    const dx = (e.clientX - S.ptDrag.sx) * r;
+    const dy = (e.clientY - S.ptDrag.sy) * r;
+    const line = S.freeLines.find(l => l.id === S.ptDrag.lineId);
+    if (line) {
+      line.points[S.ptDrag.ptIndex] = { x: S.ptDrag.origPt.x + dx, y: S.ptDrag.origPt.y + dy };
+      renderFreeLines();
+    }
+    return;
+  }
+  if (S.lineDrag) {
+    const r = 1 / S.vp.scale;
+    const dx = (e.clientX - S.lineDrag.sx) * r;
+    const dy = (e.clientY - S.lineDrag.sy) * r;
+    const line = S.freeLines.find(l => l.id === S.lineDrag.id);
+    if (line) {
+      line.points = S.lineDrag.origPoints.map(p => ({ x: p.x + dx, y: p.y + dy }));
+      renderFreeLines();
+    }
+    return;
+  }
   if (S.pan) {
     S.vp.x = e.clientX - S.pan.sx;
     S.vp.y = e.clientY - S.pan.sy;
@@ -1856,6 +2218,8 @@ document.addEventListener('mouseup', () => {
       setStatus(count > 0 ? `${count} block(s) selected — drag header to move all` : 'Ready — double-click to add block | select text to create link | right-click link to delete');
     }
   }
+  if (S.ptDrag) { S.ptDrag = null; scheduleSave(); }
+  if (S.lineDrag) { S.lineDrag = null; scheduleSave(); }
   S.drag = null; S.resize = null; S.zoomDrag = null;
   if (S.pan) S.pan = null;
   updateCursor();
@@ -1881,7 +2245,12 @@ document.addEventListener('keydown', e => {
   const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
 
   if (!isInput && (e.code === 'KeyV' || e.code === 'KeyH') && !e.ctrlKey && !e.metaKey) {
-    setMode(S.mode === 'hand' ? 'select' : 'hand');
+    if (!S.lineDrawMode) setMode(S.mode === 'hand' ? 'select' : 'hand');
+    return;
+  }
+  if (e.code === 'Enter' && S.lineDrawMode && !isInput) {
+    e.preventDefault();
+    finishDrawingLine();
     return;
   }
   if (e.code === 'Space' && !S.editing && !isInput) {
@@ -1890,7 +2259,8 @@ document.addEventListener('keydown', e => {
     if (!S.pan) updateCursor();
   }
   if (e.code === 'Escape') {
-    if (S.linkMode) exitLinkMode();
+    if (S.lineDrawMode) exitLineDrawMode();
+    else if (S.linkMode) exitLinkMode();
     else if (S.editing) stopEdit();
   }
   if ((e.code === 'Delete' || e.code === 'Backspace') && !isInput && !S.editing) {
@@ -1900,6 +2270,9 @@ document.addEventListener('keydown', e => {
     } else if (S.sel) {
       e.preventDefault();
       removeNode(S.sel);
+    } else if (S.selLine !== null) {
+      e.preventDefault();
+      removeFreeLine(S.selLine);
     }
   }
   // Copy / Cut / Paste
@@ -1944,6 +2317,11 @@ document.getElementById('btn-add').addEventListener('click', () => {
   addNode(p.x - 215, p.y - 135);
 });
 
+document.getElementById('btn-add-line')?.addEventListener('click', () => {
+  if (S.lineDrawMode) exitLineDrawMode();
+  else enterLineDrawMode();
+});
+
 // ═══════════════════════════════════════════════════════
 // UTILS
 // ═══════════════════════════════════════════════════════
@@ -1980,8 +2358,12 @@ function saveState() {
       return { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color };
     }),
     links: S.links.map(({ id, fromId, text, toId }) => ({ id, fromId, text, toId })),
+    freeLines: S.freeLines.map(({ id, points, lineStyle, stroke, strokeWidth, dash }) => ({
+      id, points: points.map(p => ({ x: p.x, y: p.y })), lineStyle, stroke, strokeWidth, dash,
+    })),
     nid: S.nid,
     lid: S.lid,
+    flid: S.flid,
     vp: { ...S.vp },
     gitConfig: { ...S.gitConfig },
   };
@@ -2003,14 +2385,19 @@ function loadState(data) {
   S.nodes.forEach(n => ndEl(n.id)?.remove());
   S.nodes = [];
   S.links = [];
+  S.freeLines = [];
   S.sel = null;
+  S.selLine = null;
   S.editing = null;
   S.multiSel.clear();
   S.clipboard = [];
   svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+  const _fll = document.getElementById('free-lines-layer');
+  if (_fll) while (_fll.firstChild) _fll.removeChild(_fll.firstChild);
 
   S.nid = data.nid ?? 1;
   S.lid = data.lid ?? 1;
+  S.flid = data.flid ?? 1;
   if (data.vp) Object.assign(S.vp, data.vp);
   if (data.gitConfig) Object.assign(S.gitConfig, data.gitConfig);
   canvasTitleEl.value = data.canvasTitle ?? '';
@@ -2047,7 +2434,16 @@ function loadState(data) {
     }
     renderNode(n, el);
   }
+  S.freeLines = (data.freeLines ?? []).map(l => ({
+    id: l.id,
+    points: (l.points ?? []).map(p => ({ x: p.x, y: p.y })),
+    lineStyle: l.lineStyle ?? 'polyline',
+    stroke: l.stroke ?? '#e6edf3',
+    strokeWidth: l.strokeWidth ?? 2,
+    dash: l.dash ?? '',
+  }));
   renderLinks();
+  renderFreeLines();
   applyVP();
 }
 
@@ -2492,11 +2888,13 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   if (!confirm('Clear the entire canvas?')) return;
   localStorage.removeItem(STORAGE_KEY);
   S.nodes.forEach(n => ndEl(n.id)?.remove());
-  S.nodes = []; S.links = []; S.nid = 1; S.lid = 1;
-  S.sel = null; S.editing = null;
+  S.nodes = []; S.links = []; S.freeLines = []; S.nid = 1; S.lid = 1; S.flid = 1;
+  S.sel = null; S.selLine = null; S.editing = null;
   S.multiSel.clear(); S.clipboard = [];
   S.gitConfig = { url: '', branch: '', tag: '', commitHash: '' };
   svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+  const _cl = document.getElementById('free-lines-layer');
+  if (_cl) while (_cl.firstChild) _cl.removeChild(_cl.firstChild);
   setStatus('Cleared');
 });
 
@@ -2909,5 +3307,6 @@ if (typeof globalThis !== 'undefined' && typeof process !== 'undefined') {
   globalThis.__canvasApp = { S, addNode, removeNode, selectNode, addBubble, loadState,
     saveState, restoreFromStorage,
     createLink, removeLink,
-    copyNodes, cutNodes, pasteNodes, toggleMultiSel };
+    copyNodes, cutNodes, pasteNodes, toggleMultiSel,
+    addFreeLine, removeFreeLine };
 }

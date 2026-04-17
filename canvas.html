@@ -21,6 +21,7 @@
   <button class="tb-btn" id="btn-add">+ Add Block</button>
   <button class="tb-btn" id="btn-add-bubble">💬 Bubble</button>
   <button class="tb-btn" id="btn-group">⬜ Frame</button>
+  <button class="tb-btn" id="btn-add-line">― Line</button>
   <div class="sep"></div>
   <button class="tb-btn" id="btn-git-config">⎇ Git Config</button>
   <div class="sep"></div>
@@ -44,6 +45,7 @@
   <div id="canvas"></div>
   <div id="marquee"></div>
   <svg id="svg-links">
+    <g id="free-lines-layer"></g>
     <defs>
       <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
         <polygon points="0 0, 8 3, 0 6" fill="context-stroke" opacity="0.65"/>
@@ -231,6 +233,26 @@
 <div id="link-tip">
   <button id="link-tip-link">🔗 Create link from here</button>
   <button id="link-tip-newblock">📄 Create new block and link</button>
+</div>
+<div id="line-ctx">
+  <div class="link-ctx-row">
+    <span class="link-ctx-label">Color</span>
+    <div id="line-ctx-colors"></div>
+  </div>
+  <div class="link-ctx-row">
+    <span class="link-ctx-label">Width</span>
+    <div id="line-ctx-widths"></div>
+  </div>
+  <div class="link-ctx-row">
+    <span class="link-ctx-label">Dash</span>
+    <div id="line-ctx-dashes"></div>
+  </div>
+  <div class="link-ctx-row">
+    <span class="link-ctx-label">Shape</span>
+    <div id="line-ctx-shapes"></div>
+  </div>
+  <div class="link-ctx-sep"></div>
+  <button id="line-ctx-del">🗑 Delete line</button>
 </div>
 <div id="link-ctx">
   <div class="link-ctx-row">

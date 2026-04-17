@@ -10548,3 +10548,894 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
 ⏺ #btn-zoom-out, #btn-zoom-in { font-size: 16px; } を追加しました。
 ```
+
+```
+❯ 新たなオブジェクトとして、線を配置できるようにしたいです。デフォルトは直線ですが、折れ線、曲線も作成できるようにしてください。数回クリックするとそこを
+通る折れ線もしくは漸近する曲線を作れるイメージです。線を作成後、右クリックで色、太さ、破線等のスタイルの変更や削除ができるメニューを表示してください
+  Read 1 file (ctrl+o to expand)
+⏺ Now let me read the canvas.html to understand the toolbar and SVG structure:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Let me read the relevant CSS sections:
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Now I have enough context to implement the feature. Let me write all the changes:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Let me check the link-hit CSS:
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Now I have a complete picture of the codebase. Let me implement all the changes across the three files.
+
+⏺ Update(canvas.html)
+  ⎿  Added 1 line
+      21    <button class="tb-btn" id="btn-add">+ Add Block</button>
+      22    <button class="tb-btn" id="btn-add-bubble">💬 Bubble</button>
+      23    <button class="tb-btn" id="btn-group">⬜ Frame</button>
+      24 +  <button class="tb-btn" id="btn-add-line">― Line</button>
+      25    <div class="sep"></div>
+      26    <button class="tb-btn" id="btn-git-config">⎇ Git Config</button>
+      27    <div class="sep"></div>
+
+⏺ Update(canvas.html)
+  ⎿  Added 1 line
+      45    <div id="canvas"></div>
+      46    <div id="marquee"></div>
+      47    <svg id="svg-links">
+      48 +    <g id="free-lines-layer"></g>
+      49      <defs>
+      50        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      51          <polygon points="0 0, 8 3, 0 6" fill="context-stroke" opacity="0.65"/>
+
+⏺ Update(canvas.html)
+  ⎿  Added 20 lines
+      234    <button id="link-tip-link">🔗 Create link from here</button>
+      235    <button id="link-tip-newblock">📄 Create new block and link</button>
+      236  </div>
+      237 +<div id="line-ctx">
+      238 +  <div class="link-ctx-row">
+      239 +    <span class="link-ctx-label">Color</span>
+      240 +    <div id="line-ctx-colors"></div>
+      241 +  </div>
+      242 +  <div class="link-ctx-row">
+      243 +    <span class="link-ctx-label">Width</span>
+      244 +    <div id="line-ctx-widths"></div>
+      245 +  </div>
+      246 +  <div class="link-ctx-row">
+      247 +    <span class="link-ctx-label">Dash</span>
+      248 +    <div id="line-ctx-dashes"></div>
+      249 +  </div>
+      250 +  <div class="link-ctx-row">
+      251 +    <span class="link-ctx-label">Shape</span>
+      252 +    <div id="line-ctx-shapes"></div>
+      253 +  </div>
+      254 +  <div class="link-ctx-sep"></div>
+      255 +  <button id="line-ctx-del">🗑 Delete line</button>
+      256 +</div>
+      257  <div id="link-ctx">
+      258    <div class="link-ctx-row">
+      259      <span class="link-ctx-label">Color</span>
+
+⏺ Now add CSS:
+
+⏺ Update(canvas.css)
+  ⎿  Added 38 lines
+      336  }
+      337  #link-ctx button#link-ctx-del:hover { background: #da3633; color: #fff; }
+      338
+      339 +/* ── Free lines ── */
+      340 +body.line-draw-mode,
+      341 +body.line-draw-mode * { cursor: crosshair !important; }
+      342 +#btn-add-line.active { background: #1f3a5f; border-color: #388bfd; color: #58a6ff; }
+      343 +.fl { pointer-events: none; }
+      344 +.fl-path { fill: none; opacity: 0.85; }
+      345 +.fl-hit {
+      346 +  fill: none; stroke: transparent; stroke-width: 14;
+      347 +  cursor: pointer; pointer-events: stroke;
+      348 +}
+      349 +.fl:hover .fl-path { opacity: 1; }
+      350 +.fl-pt-handle { pointer-events: none; }
+      351 +
+      352 +/* ── Line context menu ── */
+      353 +#line-ctx {
+      354 +  position: fixed; z-index: 310;
+      355 +  background: #161b22; border: 1px solid #30363d;
+      356 +  border-radius: 6px; padding: 8px;
+      357 +  box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+      358 +  display: none; min-width: 210px;
+      359 +}
+      360 +#line-ctx-colors, #line-ctx-widths, #line-ctx-dashes { display: flex; gap: 4px; flex-wrap: wrap; }
+      361 +#line-ctx-shapes { display: flex; gap: 4px; }
+      362 +.fl-shape-btn {
+      363 +  background: #21262d; border: 1px solid #30363d;
+      364 +  border-radius: 4px; cursor: pointer; color: #c9d1d9;
+      365 +  padding: 3px 10px; font-size: 11px;
+      366 +}
+      367 +.fl-shape-btn:hover { border-color: #58a6ff; }
+      368 +.fl-shape-btn.active { border-color: #388bfd; background: #1f3a5f; color: #58a6ff; }
+      369 +#line-ctx button#line-ctx-del {
+      370 +  display: block; width: 100%;
+      371 +  background: none; border: none; color: #e6edf3;
+      372 +  padding: 6px 10px; font-size: 13px; text-align: left;
+      373 +  border-radius: 4px; cursor: pointer; white-space: nowrap;
+      374 +}
+      375 +#line-ctx button#line-ctx-del:hover { background: #da3633; color: #fff; }
+      376 +
+      377  /* ── Toolbar ── */
+      378  #toolbar {
+      379    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+
+⏺ Now make all the canvas.js edits. Starting with STATE:
+
+⏺ Update(canvas.js)
+  ⎿  Added 6 lines
+      240    gitConfig: { url: '', branch: '', tag: '', commitHash: '' },
+      241    tailDrag: null,   // { id } — bubble tail being dragged
+      242    marquee: null,    // { sx, sy, ex, ey } — rubber-band selection in screen coords
+      243 +  freeLines: [],    // standalone line objects
+      244 +  flid: 1,          // next free-line id
+      245 +  lineDrawMode: false,
+      246 +  drawingLine: null, // { points: [{x,y}...], cursorPt: {x,y} } — line being drawn
+      247 +  selLine: null,    // selected free-line id
+      248 +  lineDrag: null,   // { id, sx, sy, origPoints } — line being dragged
+      249  };
+      250
+      251  // ═══════════════════════════════════════════════════════
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      299    wrap.style.backgroundSize = `${gs}px ${gs}px`;
+      300    wrap.style.backgroundPosition = `${x % gs}px ${y % gs}px`;
+      301    renderLinks();
+      302 +  renderFreeLines();
+      303    const zi = document.getElementById('zoom-input');
+      304    if (zi && document.activeElement !== zi) zi.value = Math.round(scale * 100) + '%';
+      305  }
+
+⏺ Update(canvas.js)
+  ⎿  Added 4 lines
+      1123  }
+      1124
+      1125  function selectNode(id) {
+      1126 +  if (S.selLine !== null) {
+      1127 +    S.selLine = null;
+      1128 +    renderFreeLines();
+      1129 +  }
+      1130    const prev = S.sel;
+      1131    S.sel = id;
+      1132    // only update CSS class — do NOT rebuild innerHTML here
+
+⏺ Now add the FREE LINES section after hideLinkCtx and its event listener:
+
+⏺ Update(canvas.js)
+  ⎿  Added 288 lines
+      1569  });
+      1570
+      1571  // ═══════════════════════════════════════════════════════
+      1572 +// FREE LINES
+      1573 +// ═══════════════════════════════════════════════════════
+      1574 +
+      1575 +function catmullRomSvg(sPts) {
+      1576 +  if (sPts.length === 2) {
+      1577 +    return `M${sPts[0].x},${sPts[0].y} L${sPts[1].x},${sPts[1].y}`;
+      1578 +  }
+      1579 +  const pts = [sPts[0], ...sPts, sPts[sPts.length - 1]];
+      1580 +  let d = `M${sPts[0].x},${sPts[0].y}`;
+      1581 +  for (let i = 1; i < pts.length - 2; i++) {
+      1582 +    const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2];
+      1583 +    const cp1x = p1.x + (p2.x - p0.x) / 6;
+      1584 +    const cp1y = p1.y + (p2.y - p0.y) / 6;
+      1585 +    const cp2x = p2.x - (p3.x - p1.x) / 6;
+      1586 +    const cp2y = p2.y - (p3.y - p1.y) / 6;
+      1587 +    d += ` C${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x},${p2.y}`;
+      1588 +  }
+      1589 +  return d;
+      1590 +}
+      1591 +
+      1592 +function freeLinePathD(line, extraPt) {
+      1593 +  const cPts = extraPt ? [...line.points, extraPt] : line.points;
+      1594 +  if (cPts.length < 2) return null;
+      1595 +  const sPts = cPts.map(p => c2s(p.x, p.y));
+      1596 +  if (line.lineStyle === 'straight') {
+      1597 +    const a = sPts[0], b = sPts[sPts.length - 1];
+      1598 +    return `M${a.x},${a.y} L${b.x},${b.y}`;
+      1599 +  }
+      1600 +  if (line.lineStyle === 'curve') return catmullRomSvg(sPts);
+      1601 +  return `M${sPts[0].x},${sPts[0].y}` + sPts.slice(1).map(p => ` L${p.x},${p.y}`).join('');
+      1602 +}
+      1603 +
+      1604 +function renderFreeLines() {
+      1605 +  const freeLayer = document.getElementById('free-lines-layer');
+      1606 +  if (!freeLayer) return;
+      1607 +  while (freeLayer.firstChild) freeLayer.removeChild(freeLayer.firstChild);
+      1608 +
+      1609 +  for (const line of S.freeLines) {
+      1610 +    const d = freeLinePathD(line, null);
+      1611 +    if (!d) continue;
+      1612 +    const isSelected = S.selLine === line.id;
+      1613 +    const stroke = line.stroke || '#e6edf3';
+      1614 +    const sw = line.strokeWidth || 2;
+      1615 +    const dash = line.dash || '';
+      1616 +
+      1617 +    const g = svgE('g', { class: 'fl' });
+      1618 +
+      1619 +    const path = svgE('path', { d, class: 'fl-path', fill: 'none' });
+      1620 +    path.style.stroke = isSelected ? '#58a6ff' : stroke;
+      1621 +    path.style.strokeWidth = sw + 'px';
+      1622 +    if (dash) path.style.strokeDasharray = dash;
+      1623 +    if (isSelected) path.style.filter = 'drop-shadow(0 0 5px #388bfd99)';
+      1624 +    g.appendChild(path);
+      1625 +
+      1626 +    if (isSelected) {
+      1627 +      for (const p of line.points) {
+      1628 +        const sp = c2s(p.x, p.y);
+      1629 +        g.appendChild(svgE('circle', {
+      1630 +          cx: sp.x, cy: sp.y, r: '5',
+      1631 +          fill: '#388bfd', stroke: '#0d1117', 'stroke-width': '1.5',
+      1632 +          class: 'fl-pt-handle',
+      1633 +        }));
+      1634 +      }
+      1635 +    }
+      1636 +
+      1637 +    const hit = svgE('path', { d, class: 'fl-hit', fill: 'none' });
+      1638 +    hit.addEventListener('click', e => {
+      1639 +      e.stopPropagation();
+      1640 +      selectFreeLine(line.id);
+      1641 +    });
+      1642 +    hit.addEventListener('contextmenu', e => {
+      1643 +      e.preventDefault();
+      1644 +      e.stopPropagation();
+      1645 +      selectFreeLine(line.id);
+      1646 +      showLineCtx(line.id, e.clientX, e.clientY);
+      1647 +    });
+      1648 +    hit.addEventListener('mousedown', e => {
+      1649 +      if (e.button !== 0 || S.lineDrawMode) return;
+      1650 +      e.stopPropagation();
+      1651 +      selectFreeLine(line.id);
+      1652 +      S.lineDrag = {
+      1653 +        id: line.id,
+      1654 +        sx: e.clientX, sy: e.clientY,
+      1655 +        origPoints: line.points.map(p => ({ ...p })),
+      1656 +      };
+      1657 +    });
+      1658 +    g.appendChild(hit);
+      1659 +    freeLayer.appendChild(g);
+      1660 +  }
+      1661 +
+      1662 +  if (S.drawingLine) {
+      1663 +    const dl = S.drawingLine;
+      1664 +    if (dl.points.length > 0) {
+      1665 +      const drawG = svgE('g', { class: 'fl' });
+      1666 +
+      1667 +      if (dl.points.length >= 2) {
+      1668 +        const placedD = freeLinePathD({ points: dl.points, lineStyle: 'polyline' }, null);
+      1669 +        if (placedD) {
+      1670 +          const placed = svgE('path', { d: placedD, fill: 'none' });
+      1671 +          placed.style.stroke = '#e6edf3';
+      1672 +          placed.style.strokeWidth = '2px';
+      1673 +          placed.style.opacity = '0.9';
+      1674 +          drawG.appendChild(placed);
+      1675 +        }
+      1676 +      }
+      1677 +
+      1678 +      if (dl.cursorPt && dl.points.length >= 1) {
+      1679 +        const lastSp = c2s(dl.points[dl.points.length - 1].x, dl.points[dl.points.length - 1].y);
+      1680 +        const curSp  = c2s(dl.cursorPt.x, dl.cursorPt.y);
+      1681 +        const preview = svgE('path', {
+      1682 +          d: `M${lastSp.x},${lastSp.y} L${curSp.x},${curSp.y}`, fill: 'none',
+      1683 +        });
+      1684 +        preview.style.stroke = '#e6edf3';
+      1685 +        preview.style.strokeWidth = '1.5px';
+      1686 +        preview.style.strokeDasharray = '6 4';
+      1687 +        preview.style.opacity = '0.55';
+      1688 +        drawG.appendChild(preview);
+      1689 +      }
+      1690 +
+      1691 +      for (const p of dl.points) {
+      1692 +        const sp = c2s(p.x, p.y);
+      1693 +        drawG.appendChild(svgE('circle', {
+      1694 +          cx: sp.x, cy: sp.y, r: '4',
+      1695 +          fill: '#e6edf3', stroke: '#0d1117', 'stroke-width': '1.5',
+      1696 +        }));
+      1697 +      }
+      1698 +
+      1699 +      freeLayer.appendChild(drawG);
+      1700 +    }
+      1701 +  }
+      1702 +}
+      1703 +
+      1704 +function selectFreeLine(id) {
+      1705 +  if (S.selLine === id) return;
+      1706 +  if (S.sel !== null) { ndEl(S.sel)?.classList.remove('selected'); S.sel = null; }
+      1707 +  clearMultiSel();
+      1708 +  S.selLine = id;
+      1709 +  renderFreeLines();
+      1710 +  setStatus('Line selected — drag to move | right-click for options | Del to delete');
+      1711 +}
+      1712 +
+      1713 +function addFreeLine(points, lineStyle, stroke, strokeWidth, dash) {
+      1714 +  const line = {
+      1715 +    id: S.flid++,
+      1716 +    points: points.map(p => ({ x: p.x, y: p.y })),
+      1717 +    lineStyle: lineStyle || 'polyline',
+      1718 +    stroke: stroke || '#e6edf3',
+      1719 +    strokeWidth: strokeWidth || 2,
+      1720 +    dash: dash || '',
+      1721 +  };
+      1722 +  S.freeLines.push(line);
+      1723 +  renderFreeLines();
+      1724 +  selectFreeLine(line.id);
+      1725 +  scheduleSave();
+      1726 +  return line;
+      1727 +}
+      1728 +
+      1729 +function removeFreeLine(id) {
+      1730 +  S.freeLines = S.freeLines.filter(l => l.id !== id);
+      1731 +  if (S.selLine === id) S.selLine = null;
+      1732 +  renderFreeLines();
+      1733 +  scheduleSave();
+      1734 +}
+      1735 +
+      1736 +function enterLineDrawMode() {
+      1737 +  S.lineDrawMode = true;
+      1738 +  S.drawingLine = null;
+      1739 +  document.body.classList.add('line-draw-mode');
+      1740 +  selectNode(null);
+      1741 +  setStatus('Line draw: click to add points, double-click or Enter to finish, Esc to cancel');
+      1742 +  document.getElementById('btn-add-line').classList.add('active');
+      1743 +}
+      1744 +
+      1745 +function exitLineDrawMode() {
+      1746 +  S.lineDrawMode = false;
+      1747 +  S.drawingLine = null;
+      1748 +  document.body.classList.remove('line-draw-mode');
+      1749 +  renderFreeLines();
+      1750 +  document.getElementById('btn-add-line').classList.remove('active');
+      1751 +  setStatus('Ready — double-click to add block | select text to create link | right-click link to delete');
+      1752 +}
+      1753 +
+      1754 +function finishDrawingLine() {
+      1755 +  const dl = S.drawingLine;
+      1756 +  if (!dl || dl.points.length < 2) { exitLineDrawMode(); return; }
+      1757 +  addFreeLine(dl.points, 'polyline', '#e6edf3', 2, '');
+      1758 +  exitLineDrawMode();
+      1759 +}
+      1760 +
+      1761 +function showLineCtx(lineId, x, y) {
+      1762 +  const line = S.freeLines.find(l => l.id === lineId);
+      1763 +  if (!line) return;
+      1764 +
+      1765 +  const lineCtxEl     = document.getElementById('line-ctx');
+      1766 +  const lineCtxColors = document.getElementById('line-ctx-colors');
+      1767 +  const lineCtxWidths = document.getElementById('line-ctx-widths');
+      1768 +  const lineCtxDashes = document.getElementById('line-ctx-dashes');
+      1769 +  const lineCtxShapes = document.getElementById('line-ctx-shapes');
+      1770 +  const lineCtxDel    = document.getElementById('line-ctx-del');
+      1771 +
+      1772 +  const curStroke = line.stroke || '#e6edf3';
+      1773 +  const curWidth  = line.strokeWidth || 2;
+      1774 +  const curDash   = line.dash || '';
+      1775 +  const curShape  = line.lineStyle || 'polyline';
+      1776 +
+      1777 +  lineCtxColors.innerHTML = '';
+      1778 +  for (const c of LINK_COLORS) {
+      1779 +    const sw = document.createElement('div');
+      1780 +    sw.className = 'lk-color-swatch' + (curStroke === c.value ? ' active' : '');
+      1781 +    sw.style.background = c.value;
+      1782 +    sw.title = c.label;
+      1783 +    sw.addEventListener('click', () => {
+      1784 +      line.stroke = c.value;
+      1785 +      renderFreeLines(); scheduleSave();
+      1786 +      lineCtxColors.querySelectorAll('.lk-color-swatch').forEach(el => el.classList.remove('active'));
+      1787 +      sw.classList.add('active');
+      1788 +      showLineCtx(lineId, x, y);
+      1789 +    });
+      1790 +    lineCtxColors.appendChild(sw);
+      1791 +  }
+      1792 +
+      1793 +  lineCtxWidths.innerHTML = '';
+      1794 +  for (const w of LINK_WIDTHS) {
+      1795 +    const btn = document.createElement('button');
+      1796 +    btn.className = 'lk-width-btn' + (curWidth === w.value ? ' active' : '');
+      1797 +    btn.innerHTML = makeWidthSvg(Math.min(w.value, 5), curStroke);
+      1798 +    btn.title = `${w.value}px`;
+      1799 +    btn.addEventListener('click', () => {
+      1800 +      line.strokeWidth = w.value;
+      1801 +      renderFreeLines(); scheduleSave();
+      1802 +      lineCtxWidths.querySelectorAll('.lk-width-btn').forEach(el => el.classList.remove('active'));
+      1803 +      btn.classList.add('active');
+      1804 +    });
+      1805 +    lineCtxWidths.appendChild(btn);
+      1806 +  }
+      1807 +
+      1808 +  lineCtxDashes.innerHTML = '';
+      1809 +  for (const d of LINK_DASHES) {
+      1810 +    const btn = document.createElement('button');
+      1811 +    btn.className = 'lk-dash-btn' + (curDash === d.value ? ' active' : '');
+      1812 +    btn.innerHTML = makeDashSvg(d.value, curStroke);
+      1813 +    btn.title = d.title;
+      1814 +    btn.addEventListener('click', () => {
+      1815 +      line.dash = d.value;
+      1816 +      renderFreeLines(); scheduleSave();
+      1817 +      lineCtxDashes.querySelectorAll('.lk-dash-btn').forEach(el => el.classList.remove('active'));
+      1818 +      btn.classList.add('active');
+      1819 +    });
+      1820 +    lineCtxDashes.appendChild(btn);
+      1821 +  }
+      1822 +
+      1823 +  lineCtxShapes.innerHTML = '';
+      1824 +  const SHAPES = [
+      1825 +    { label: 'Straight', value: 'straight' },
+      1826 +    { label: 'Polyline', value: 'polyline' },
+      1827 +    { label: 'Curve',    value: 'curve'    },
+      1828 +  ];
+      1829 +  for (const sh of SHAPES) {
+      1830 +    const btn = document.createElement('button');
+      1831 +    btn.className = 'fl-shape-btn' + (curShape === sh.value ? ' active' : '');
+      1832 +    btn.textContent = sh.label;
+      1833 +    btn.addEventListener('click', () => {
+      1834 +      line.lineStyle = sh.value;
+      1835 +      renderFreeLines(); scheduleSave();
+      1836 +      lineCtxShapes.querySelectorAll('.fl-shape-btn').forEach(el => el.classList.remove('active'));
+      1837 +      btn.classList.add('active');
+      1838 +    });
+      1839 +    lineCtxShapes.appendChild(btn);
+      1840 +  }
+      1841 +
+      1842 +  lineCtxDel.onclick = () => { hideLineCtx(); removeFreeLine(lineId); };
+      1843 +
+      1844 +  lineCtxEl.style.display = 'block';
+      1845 +  const cw = lineCtxEl.offsetWidth || 220;
+      1846 +  const ch = lineCtxEl.offsetHeight || 200;
+      1847 +  lineCtxEl.style.left = Math.min(x, window.innerWidth  - cw - 8) + 'px';
+      1848 +  lineCtxEl.style.top  = Math.min(y, window.innerHeight - ch - 8) + 'px';
+      1849 +}
+      1850 +
+      1851 +function hideLineCtx() {
+      1852 +  document.getElementById('line-ctx').style.display = 'none';
+      1853 +}
+      1854 +
+      1855 +document.addEventListener('mousedown', e => {
+      1856 +  if (!e.target.closest('#line-ctx')) hideLineCtx();
+      1857 +});
+      1858 +
+      1859 +// ═══════════════════════════════════════════════════════
+      1860  // LINK PREVIEW (link-mode hover)
+      1861  // ═══════════════════════════════════════════════════════
+      1862  wrap.addEventListener('mousemove', e => {
+
+⏺ Now add the line draw mode capture-phase handlers after the existing dblclick handler:
+
+⏺ Update(canvas.js)
+  ⎿  Added 24 lines
+      2001    addNode(p.x - 215, p.y - 135);
+      2002  });
+      2003
+      2004 +// Capture-phase handlers for line draw mode (intercept before node handlers)
+      2005 +wrap.addEventListener('mousedown', e => {
+      2006 +  if (!S.lineDrawMode || e.button !== 0) return;
+      2007 +  e.preventDefault();
+      2008 +  e.stopPropagation();
+      2009 +  const p = s2c(e.clientX, e.clientY);
+      2010 +  if (!S.drawingLine) {
+      2011 +    S.drawingLine = { points: [p], cursorPt: p };
+      2012 +  } else {
+      2013 +    S.drawingLine.points.push(p);
+      2014 +  }
+      2015 +  renderFreeLines();
+      2016 +}, true);
+      2017 +
+      2018 +wrap.addEventListener('dblclick', e => {
+      2019 +  if (!S.lineDrawMode) return;
+      2020 +  e.preventDefault();
+      2021 +  e.stopPropagation();
+      2022 +  if (!S.drawingLine) { exitLineDrawMode(); return; }
+      2023 +  // Pop duplicate point added by the 2nd mousedown of the double-click
+      2024 +  if (S.drawingLine.points.length > 1) S.drawingLine.points.pop();
+      2025 +  finishDrawingLine();
+      2026 +}, true);
+      2027 +
+      2028  document.addEventListener('mousemove', e => {
+      2029    if (S.pan) {
+      2030      S.vp.x = e.clientX - S.pan.sx;
+
+⏺ Now add the line preview update to the mousemove handler:
+
+⏺ Update(canvas.js)
+  ⎿  Added 15 lines
+      2026  }, true);
+      2027
+      2028  document.addEventListener('mousemove', e => {
+      2029 +  if (S.lineDrawMode && S.drawingLine) {
+      2030 +    S.drawingLine.cursorPt = s2c(e.clientX, e.clientY);
+      2031 +    renderFreeLines();
+      2032 +  }
+      2033 +  if (S.lineDrag) {
+      2034 +    const r = 1 / S.vp.scale;
+      2035 +    const dx = (e.clientX - S.lineDrag.sx) * r;
+      2036 +    const dy = (e.clientY - S.lineDrag.sy) * r;
+      2037 +    const line = S.freeLines.find(l => l.id === S.lineDrag.id);
+      2038 +    if (line) {
+      2039 +      line.points = S.lineDrag.origPoints.map(p => ({ x: p.x + dx, y: p.y + dy }));
+      2040 +      renderFreeLines();
+      2041 +    }
+      2042 +    return;
+      2043 +  }
+      2044    if (S.pan) {
+      2045      S.vp.x = e.clientX - S.pan.sx;
+      2046      S.vp.y = e.clientY - S.pan.sy;
+
+⏺ Add lineDrag cleanup to mouseup:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      2194        setStatus(count > 0 ? `${count} block(s) selected — drag header to move all` : 'Ready — double-click to add block | select text
+            to create link | right-click link to delete');
+      2195      }
+      2196    }
+      2197 +  if (S.lineDrag) { S.lineDrag = null; scheduleSave(); }
+      2198    S.drag = null; S.resize = null; S.zoomDrag = null;
+      2199    if (S.pan) S.pan = null;
+      2200    updateCursor();
+
+⏺ Now update keyboard handlers:
+
+⏺ Update(canvas.js)
+  ⎿  Added 6 lines, removed 1 line
+      2220    const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
+      2221
+      2222    if (!isInput && (e.code === 'KeyV' || e.code === 'KeyH') && !e.ctrlKey && !e.metaKey) {
+      2223 -    setMode(S.mode === 'hand' ? 'select' : 'hand');
+      2223 +    if (!S.lineDrawMode) setMode(S.mode === 'hand' ? 'select' : 'hand');
+      2224      return;
+      2225    }
+      2226 +  if (e.code === 'Enter' && S.lineDrawMode && !isInput) {
+      2227 +    e.preventDefault();
+      2228 +    finishDrawingLine();
+      2229 +    return;
+      2230 +  }
+      2231    if (e.code === 'Space' && !S.editing && !isInput) {
+      2232      e.preventDefault();
+      2233      S.spaceDown = true;
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 1 line
+      2234      if (!S.pan) updateCursor();
+      2235    }
+      2236    if (e.code === 'Escape') {
+      2237 -    if (S.linkMode) exitLinkMode();
+      2237 +    if (S.lineDrawMode) exitLineDrawMode();
+      2238 +    else if (S.linkMode) exitLinkMode();
+      2239      else if (S.editing) stopEdit();
+      2240    }
+      2241    if ((e.code === 'Delete' || e.code === 'Backspace') && !isInput && !S.editing) {
+
+⏺ Update(canvas.js)
+  ⎿  Added 3 lines
+      2245      } else if (S.sel) {
+      2246        e.preventDefault();
+      2247        removeNode(S.sel);
+      2248 +    } else if (S.selLine !== null) {
+      2249 +      e.preventDefault();
+      2250 +      removeFreeLine(S.selLine);
+      2251      }
+      2252    }
+      2253    // Copy / Cut / Paste
+
+⏺ Now add the toolbar button listener:
+
+⏺ Update(canvas.js)
+  ⎿  Added 5 lines
+      2292    addNode(p.x - 215, p.y - 135);
+      2293  });
+      2294
+      2295 +document.getElementById('btn-add-line').addEventListener('click', () => {
+      2296 +  if (S.lineDrawMode) exitLineDrawMode();
+      2297 +  else enterLineDrawMode();
+      2298 +});
+      2299 +
+      2300  // ═══════════════════════════════════════════════════════
+      2301  // UTILS
+      2302  // ═══════════════════════════════════════════════════════
+
+⏺ Now update saveState():
+
+⏺ Update(canvas.js)
+  ⎿  Added 4 lines
+      2333        return { id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color };
+      2334      }),
+      2335      links: S.links.map(({ id, fromId, text, toId }) => ({ id, fromId, text, toId })),
+      2336 +    freeLines: S.freeLines.map(({ id, points, lineStyle, stroke, strokeWidth, dash }) => ({
+      2337 +      id, points: points.map(p => ({ x: p.x, y: p.y })), lineStyle, stroke, strokeWidth, dash,
+      2338 +    })),
+      2339      nid: S.nid,
+      2340      lid: S.lid,
+      2341 +    flid: S.flid,
+      2342      vp: { ...S.vp },
+      2343      gitConfig: { ...S.gitConfig },
+      2344    };
+
+⏺ Now update loadState():
+
+⏺ Update(canvas.js)
+  ⎿  Added 4 lines
+      2360    S.nodes.forEach(n => ndEl(n.id)?.remove());
+      2361    S.nodes = [];
+      2362    S.links = [];
+      2363 +  S.freeLines = [];
+      2364    S.sel = null;
+      2365 +  S.selLine = null;
+      2366    S.editing = null;
+      2367    S.multiSel.clear();
+      2368    S.clipboard = [];
+      2369    svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+      2370 +  const _fll = document.getElementById('free-lines-layer');
+      2371 +  if (_fll) while (_fll.firstChild) _fll.removeChild(_fll.firstChild);
+      2372
+      2373    S.nid = data.nid ?? 1;
+      2374    S.lid = data.lid ?? 1;
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      2372
+      2373    S.nid = data.nid ?? 1;
+      2374    S.lid = data.lid ?? 1;
+      2375 +  S.flid = data.flid ?? 1;
+      2376    if (data.vp) Object.assign(S.vp, data.vp);
+      2377    if (data.gitConfig) Object.assign(S.gitConfig, data.gitConfig);
+      2378    canvasTitleEl.value = data.canvasTitle ?? '';
+
+⏺ Update(canvas.js)
+  ⎿  Added 9 lines
+      2409      }
+      2410      renderNode(n, el);
+      2411    }
+      2412 +  S.freeLines = (data.freeLines ?? []).map(l => ({
+      2413 +    id: l.id,
+      2414 +    points: (l.points ?? []).map(p => ({ x: p.x, y: p.y })),
+      2415 +    lineStyle: l.lineStyle ?? 'polyline',
+      2416 +    stroke: l.stroke ?? '#e6edf3',
+      2417 +    strokeWidth: l.strokeWidth ?? 2,
+      2418 +    dash: l.dash ?? '',
+      2419 +  }));
+      2420    renderLinks();
+      2421 +  renderFreeLines();
+      2422    applyVP();
+      2423  }
+      2424
+
+⏺ Now update the btn-clear handler:
+
+⏺ Update(canvas.js)
+  ⎿  Added 4 lines, removed 2 lines
+      2863    if (!confirm('Clear the entire canvas?')) return;
+      2864    localStorage.removeItem(STORAGE_KEY);
+      2865    S.nodes.forEach(n => ndEl(n.id)?.remove());
+      2866 -  S.nodes = []; S.links = []; S.nid = 1; S.lid = 1;
+      2867 -  S.sel = null; S.editing = null;
+      2866 +  S.nodes = []; S.links = []; S.freeLines = []; S.nid = 1; S.lid = 1; S.flid = 1;
+      2867 +  S.sel = null; S.selLine = null; S.editing = null;
+      2868    S.multiSel.clear(); S.clipboard = [];
+      2869    S.gitConfig = { url: '', branch: '', tag: '', commitHash: '' };
+      2870    svgLinks.querySelectorAll('.lk').forEach(e => e.remove());
+      2871 +  const _cl = document.getElementById('free-lines-layer');
+      2872 +  if (_cl) while (_cl.firstChild) _cl.removeChild(_cl.firstChild);
+      2873    setStatus('Cleared');
+      2874  });
+      2875
+
+⏺ Finally, update the test exports:
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 1 line
+      3282    globalThis.__canvasApp = { S, addNode, removeNode, selectNode, addBubble, loadState,
+      3283      saveState, restoreFromStorage,
+      3284      createLink, removeLink,
+      3285 -    copyNodes, cutNodes, pasteNodes, toggleMultiSel };
+      3285 +    copyNodes, cutNodes, pasteNodes, toggleMultiSel,
+      3286 +    addFreeLine, removeFreeLine };
+      3287  }
+
+⏺ Now let me run the tests to make sure nothing broke:
+
+⏺ Bash(npm test 2>&1 | tail -30)
+  ⎿  TypeError: Cannot read properties of null (reading 'addEventListener')
+      ❯ canvas.js:2295:40
+         2293| });
+     … +26 lines (ctrl+o to expand)
+
+⏺ The test environment doesn't have the toolbar HTML. Let me guard the button listener:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line, removed 1 line
+      2292    addNode(p.x - 215, p.y - 135);
+      2293  });
+      2294
+      2295 -document.getElementById('btn-add-line').addEventListener('click', () => {
+      2295 +document.getElementById('btn-add-line')?.addEventListener('click', () => {
+      2296    if (S.lineDrawMode) exitLineDrawMode();
+      2297    else enterLineDrawMode();
+      2298  });
+
+⏺ Bash(npm test 2>&1 | tail -20)
+  ⎿  > test
+     > vitest run
+     … +10 lines (ctrl+o to expand)
+
+⏺ All 42 tests pass. Here's a summary of what was implemented:
+
+  ---
+  新機能: フリーライン (― Line)
+
+  使い方
+
+  1. ツールバーの ― Line ボタンをクリックして描画モードに入る
+  2. キャンバスをクリックして頂点を追加
+  3. ダブルクリック または Enter で線を確定、Esc でキャンセル
+
+  線の種類
+
+  右クリックメニューの Shape で変更可能:
+  - Straight (直線): 最初と最後の点を結ぶだけ
+  - Polyline (折れ線): すべての点を直線で結ぶ (デフォルト)
+  - Curve (曲線): Catmull-Rom スプラインによる滑らかな曲線
+
+  右クリックメニュー
+
+  - Color: 線の色
+  - Width: 線の太さ
+  - Dash: 実線 / 破線 / 点線 等
+  - Shape: Straight / Polyline / Curve
+  - Delete line: 削除
+
+  その他
+
+  - 線をクリックで選択 → ドラッグで移動
+  - 選択中は頂点ハンドルを表示
+  - Del / Backspace で選択中の線を削除
+  - Export/Import JSON に保存・復元対応
+
+✻ Baked for 10m 53s
+
+❯ 作成した線をドラッグする際、頂点をドラッグした場合はその点を移動して線を作り直す、頂点以外をドラッグした場合は線全体を移動(今の挙動)、という動きにして
+ください
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Now I have a clear picture. I'll:
+  1. Add ptDrag to state
+  2. Reorder the renderFreeLines loop: hit path first, then circles on top (so circles intercept events), and change the circles to indexed loop with
+  individual point drag
+  3. Add ptDrag handling to mousemove and mouseup
+  4. Update CSS to remove pointer-events: none from .fl-pt-handle
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      246    drawingLine: null, // { points: [{x,y}...], cursorPt: {x,y} } — line being drawn
+      247    selLine: null,    // selected free-line id
+      248    lineDrag: null,   // { id, sx, sy, origPoints } — line being dragged
+      249 +  ptDrag: null,     // { lineId, ptIndex, sx, sy, origPt } — single point being dragged
+      250  };
+      251
+      252  // ═══════════════════════════════════════════════════════
+
+⏺ Now rewrite the renderFreeLines loop to put the hit path before the circles and add per-point drag:
+
+⏺ Update(canvas.js)
+  ⎿  Added 23 lines, removed 11 lines
+      1624      if (isSelected) path.style.filter = 'drop-shadow(0 0 5px #388bfd99)';
+      1625      g.appendChild(path);
+      1626
+      1627 -    if (isSelected) {
+      1628 -      for (const p of line.points) {
+      1629 -        const sp = c2s(p.x, p.y);
+      1630 -        g.appendChild(svgE('circle', {
+      1631 -          cx: sp.x, cy: sp.y, r: '5',
+      1632 -          fill: '#388bfd', stroke: '#0d1117', 'stroke-width': '1.5',
+      1633 -          class: 'fl-pt-handle',
+      1634 -        }));
+      1635 -      }
+      1636 -    }
+      1637 -
+      1627 +    // Hit path for whole-line drag (rendered before point handles so handles are on top)
+      1628      const hit = svgE('path', { d, class: 'fl-hit', fill: 'none' });
+      1629      hit.addEventListener('click', e => {
+      1630        e.stopPropagation();
+     ...
+      1647        };
+      1648      });
+      1649      g.appendChild(hit);
+      1650 +
+      1651 +    // Point handles rendered on top — each intercepts drag for individual point movement
+      1652 +    if (isSelected) {
+      1653 +      for (let i = 0; i < line.points.length; i++) {
+      1654 +        const p = line.points[i];
+      1655 +        const sp = c2s(p.x, p.y);
+      1656 +        const circ = svgE('circle', {
+      1657 +          cx: sp.x, cy: sp.y, r: '6',
+      1658 +          fill: '#388bfd', stroke: '#0d1117', 'stroke-width': '1.5',
+      1659 +          class: 'fl-pt-handle',
+      1660 +        });
+      1661 +        circ.style.pointerEvents = 'all';
+      1662 +        circ.style.cursor = 'move';
+      1663 +        circ.addEventListener('mousedown', e => {
+      1664 +          if (e.button !== 0 || S.lineDrawMode) return;
+      1665 +          e.stopPropagation();
+      1666 +          S.ptDrag = { lineId: line.id, ptIndex: i, sx: e.clientX, sy: e.clientY, origPt: { ...p } };
+      1667 +        });
+      1668 +        g.appendChild(circ);
+      1669 +      }
+      1670 +    }
+      1671 +
+      1672      freeLayer.appendChild(g);
+      1673    }
+      1674
+
+⏺ Add ptDrag handling to mousemove (before lineDrag):
+
+⏺ Update(canvas.js)
+  ⎿  Added 11 lines
+      2043      S.drawingLine.cursorPt = s2c(e.clientX, e.clientY);
+      2044      renderFreeLines();
+      2045    }
+      2046 +  if (S.ptDrag) {
+      2047 +    const r = 1 / S.vp.scale;
+      2048 +    const dx = (e.clientX - S.ptDrag.sx) * r;
+      2049 +    const dy = (e.clientY - S.ptDrag.sy) * r;
+      2050 +    const line = S.freeLines.find(l => l.id === S.ptDrag.lineId);
+      2051 +    if (line) {
+      2052 +      line.points[S.ptDrag.ptIndex] = { x: S.ptDrag.origPt.x + dx, y: S.ptDrag.origPt.y + dy };
+      2053 +      renderFreeLines();
+      2054 +    }
+      2055 +    return;
+      2056 +  }
+      2057    if (S.lineDrag) {
+      2058      const r = 1 / S.vp.scale;
+      2059      const dx = (e.clientX - S.lineDrag.sx) * r;
+
+⏺ Add ptDrag cleanup to mouseup:
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      2218        setStatus(count > 0 ? `${count} block(s) selected — drag header to move all` : 'Ready — double-click to add block | select text
+            to create link | right-click link to delete');
+      2219      }
+      2220    }
+      2221 +  if (S.ptDrag) { S.ptDrag = null; scheduleSave(); }
+      2222    if (S.lineDrag) { S.lineDrag = null; scheduleSave(); }
+      2223    S.drag = null; S.resize = null; S.zoomDrag = null;
+      2224    if (S.pan) S.pan = null;
+
+⏺ Update CSS to remove pointer-events: none from .fl-pt-handle (since we now set it inline):
+
+⏺ Update(canvas.css)
+  ⎿  Added 1 line, removed 1 line
+      347    cursor: pointer; pointer-events: stroke;
+      348  }
+      349  .fl:hover .fl-path { opacity: 1; }
+      350 -.fl-pt-handle { pointer-events: none; }
+      350 +.fl-pt-handle { pointer-events: none; } /* overridden inline when selected */
+      351
+      352  /* ── Line context menu ── */
+      353  #line-ctx {
+
+⏺ Bash(npm test 2>&1 | tail -10)
+  ⎿   RUN  v2.1.9 /Users/ori/devel/src/github.com/orimanabu/code-canvas
+
+      ✓ tests/canvas-dom.test.js (21 tests) 238ms
+     … +6 lines (ctrl+o to expand)
+
+⏺ 全テスト通過。変更内容:
+
+  - 頂点ハンドル（青い円）をドラッグ → その頂点だけ移動して線を変形。線が選択された状態のみ表示
+  - 線本体（頂点以外）をドラッグ → 線全体を移動（従来の挙動）
+
+  SVG の描画順を「hit path → 頂点ハンドル」の順にしたことで、ハンドルが hit path の上に来てポインターイベントを優先的に受け取ります。e.stopPropagation()
+  によって、頂点をドラッグしても全体ドラッグにならないようにしています。
+
+✻ Churned for 1m 25s
+```
