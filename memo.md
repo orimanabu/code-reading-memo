@@ -12751,3 +12751,171 @@ access control checks. というエラーが出て/pipe APIでcodesnippetdと通
 
   つまり「fromノードの出発点が、toノードの境界ボックスのどの外側にあるか」で4方向を切り分けています。
 ```
+
+```
+❯ targetEntryPoint()およびrenderLinks()の動きを変えたいです。今の実装では、anchorElが存在する場合、anchorElを囲む長方形の重心がリンクの始点になって
+います。これを、targetEntryPointでリンク接続先が変わるごとにリンクの始点も変えたいです。具体的には、以下のようにしてください
+- リンク接続先がleftの場合、リンクの始点はanchorElを囲む長方形の右側の辺の中点にする
+- リンク接続先がrightの場合、リンクの始点はanchorElを囲む長方形の左側の辺の中点にする
+- リンク接続先がtopの場合、リンクの始点はanchorElを囲む長方形の下側の辺の中点にする
+- リンク接続先がbottomの場合、リンクの始点はanchorElを囲む長方形の上側の辺の中点にする
+
+⏺ まず関連コードを確認します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ プレビュー時に S.pending.anchorPos がどう設定されているか確認します。
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ enterLinkModeの呼び出し箇所の周辺も確認します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 全体像が把握できました。変更箇所は5カ所です：
+
+  1. targetEntryPoint — { point, side } を返すように変更
+  2. anchorFpFromSide ヘルパー追加
+  3. renderLinks — side に応じて fp を調整
+  4. enterLinkMode + mouseup handler — anchorPos（中点）を anchorRect（矩形）に変更
+  5. プレビューの mousemove — 同様に fp を調整
+
+⏺ Update(canvas.js)
+  ⎿  Added 9 lines
+      200    return bestT < Infinity ? { x: bestX, y: bestY, tx: bestTx, ty: bestTy } : null;
+      201  }
+      202
+      203 +// Given a bounding rect r (screen coords) and the side the arrow enters the target node,
+      204 +// return the fp that exits from the opposite side of the anchor element.
+      205 +function anchorFpFromSide(r, side) {
+      206 +  if (side === 'left')   return { x: r.right,              y: r.top + r.height / 2 };
+      207 +  if (side === 'right')  return { x: r.left,               y: r.top + r.height / 2 };
+      208 +  if (side === 'top')    return { x: r.left + r.width / 2, y: r.bottom };
+      209 +  /* bottom */           return { x: r.left + r.width / 2, y: r.top };
+      210 +}
+      211 +
+      212  // Compute the exit point on the edge of `from` node in the direction of `to` node.
+      213  // Both nodes are plain objects with { x, y, w, h } in canvas coordinates.
+      214  function edgePoint(from, to) {
+
+⏺ Update(canvas.js)
+  ⎿  Added 4 lines, removed 4 lines
+      1444    const right  = c2s(tn.x + tn.w,       tn.y + tn.h * 0.25);
+      1445    const bottom = c2s(tn.x + tn.w * 0.2, tn.y + tn.h);
+      1446
+      1447 -  if (fp.x > nBR.x) return right;   // source clearly to the right
+      1448 -  if (fp.y > nBR.y && fp.x > nTL.x) return bottom;  // source clearly below
+      1449 -  if (fp.y < nTL.y && fp.x > nTL.x) return top;     // source clearly above
+      1450 -  return left;                       // default: left edge, upper area
+      1447 +  if (fp.x > nBR.x) return { point: right,  side: 'right' };
+      1448 +  if (fp.y > nBR.y && fp.x > nTL.x) return { point: bottom, side: 'bottom' };
+      1449 +  if (fp.y < nTL.y && fp.x > nTL.x) return { point: top,    side: 'top' };
+      1450 +  return { point: left, side: 'left' };  // default: left edge, upper area
+      1451  }
+      1452
+      1453  function renderLinks() {
+
+⏺ Update(canvas.js)
+  ⎿  Added 5 lines, removed 4 lines
+      1459
+      1460      // Start point: anchor element position if available, else node edge
+      1461      const anchorEl = document.querySelector(`.link-anchor[data-lid="${lnk.id}"]`);
+      1462 -    let fp;
+      1462 +    let fp, anchorRect;
+      1463      if (anchorEl) {
+      1464 -      const r = anchorEl.getBoundingClientRect();
+      1465 -      fp = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      1464 +      anchorRect = anchorEl.getBoundingClientRect();
+      1465 +      fp = { x: anchorRect.left + anchorRect.width / 2, y: anchorRect.top + anchorRect.height / 2 };
+      1466      } else {
+      1467        fp = c2s(edgePoint(fn, tn).x, edgePoint(fn, tn).y);
+      1468      }
+      1469
+      1470 -    const tp = targetEntryPoint(fp, tn);
+      1470 +    const { point: tp, side } = targetEntryPoint(fp, tn);
+      1471 +    if (anchorEl) fp = anchorFpFromSide(anchorRect, side);
+      1472
+      1473      const dx = tp.x - fp.x;
+      1474      const dy = tp.y - fp.y;
+
+⏺ Update(canvas.js)
+  ⎿  Added 2 lines, removed 2 lines
+      1510  // ═══════════════════════════════════════════════════════
+      1511  // LINK MODE
+      1512  // ═══════════════════════════════════════════════════════
+      1513 -function enterLinkMode(fromId, text, anchorPos = null) {
+      1513 +function enterLinkMode(fromId, text, anchorRect = null) {
+      1514    S.linkMode = true;
+      1515 -  S.pending = { fromId, text, anchorPos };
+      1515 +  S.pending = { fromId, text, anchorRect };
+      1516    document.body.classList.add('link-mode');
+      1517    setStatus(`🔗 Click the target block — "${text}" → ? (Esc to cancel)`);
+      1518  }
+
+⏺ Update(canvas.js)
+  ⎿  Added 6 lines, removed 3 lines
+      1973      return;
+      1974    }
+      1975
+      1976 -  const fp = S.pending.anchorPos ?? c2s(edgePoint(fn, tn).x, edgePoint(fn, tn).y);
+      1977 -
+      1978 -  const tp = targetEntryPoint(fp, tn);
+      1976 +  const ar = S.pending.anchorRect;
+      1977 +  let fp = ar
+      1978 +    ? { x: ar.left + ar.width / 2, y: ar.top + ar.height / 2 }
+      1979 +    : c2s(edgePoint(fn, tn).x, edgePoint(fn, tn).y);
+      1980 +  const { point: tp, side } = targetEntryPoint(fp, tn);
+      1981 +  if (ar) fp = anchorFpFromSide(ar, side);
+      1982    const dx = tp.x - fp.x;
+      1983    const dy = tp.y - fp.y;
+      1984    const d = `M${fp.x},${fp.y} C${fp.x + dx * 0.45},${fp.y + dy * 0.1} ${tp.x - dx * 0.45},${tp.y - dy * 0.1} ${tp.x},${tp.y}`;
+
+⏺ 最後に mouseup handler の anchorPos → anchorRect を更新します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 3 lines, removed 3 lines
+      2016    linkTip.style.left    = (rect.left + rect.width / 2) + 'px';
+      2017    linkTip.style.top     = Math.max(8, rect.top - tipHeight - 8) + 'px';
+      2018
+      2019 -  const anchorPos = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      2019 +  const anchorRect = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.he
+           +ight };
+      2020
+      2021    linkTipLink.onclick = () => {
+      2022      sel.removeAllRanges();
+      2023      linkTip.style.display = 'none';
+      2024 -    enterLinkMode(fromId, text, anchorPos);
+      2024 +    enterLinkMode(fromId, text, anchorRect);
+      2025    };
+      2026
+      2027    linkTipNewBlock.onclick = () => {
+     ...
+      2029      linkTip.style.display = 'none';
+      2030      const fn = S.nodes.find(n => n.id === fromId);
+      2031      const nx = fn ? fn.x + fn.w + 60 : 100;
+      2032 -    const ny = s2c(anchorPos.x, anchorPos.y).y;
+      2032 +    const ny = s2c(anchorRect.left + anchorRect.width / 2, anchorRect.top + anchorRect.height / 2).y;
+      2033      const newNode = addNode(nx, ny);
+      2034      createLink(fromId, text, newNode.id);
+      2035      renderLinks();
+
+⏺ 変更完了です。変更内容のまとめ：
+
+  ┌───────────────────────────┬────────────────────────────────────────────────────────────────────┐
+  │         関数/箇所         │                              変更内容                              │
+  ├───────────────────────────┼────────────────────────────────────────────────────────────────────┤
+  │ anchorFpFromSide(r, side) │ 新規追加。side に応じてアンカー矩形の対応する辺の中点を返す        │
+  ├───────────────────────────┼────────────────────────────────────────────────────────────────────┤
+  │ targetEntryPoint          │ 戻り値を { point, side } に変更                                    │
+  ├───────────────────────────┼────────────────────────────────────────────────────────────────────┤
+  │ renderLinks               │ anchorEl がある場合、side 確定後に anchorFpFromSide で fp を再計算 │
+  ├───────────────────────────┼────────────────────────────────────────────────────────────────────┤
+  │ enterLinkMode             │ 引数 anchorPos（中点）→ anchorRect（矩形オブジェクト）に変更       │
+  ├───────────────────────────┼────────────────────────────────────────────────────────────────────┤
+  │ mousemove プレビュー      │ 同様に anchorRect から中点を仮算出→side 確定後に fp を調整         │
+  ├───────────────────────────┼────────────────────────────────────────────────────────────────────┤
+  │ mouseup handler           │ anchorPos を anchorRect に変更、linkTipNewBlock の ny 計算も更新   │
+  └───────────────────────────┴────────────────────────────────────────────────────────────────────┘
+
+✻ Brewed for 1m 53s
+```

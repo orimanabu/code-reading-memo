@@ -200,6 +200,15 @@ function roundedRectRayHit(ocx, ocy, tipX, tipY, bl, br, r) {
   return bestT < Infinity ? { x: bestX, y: bestY, tx: bestTx, ty: bestTy } : null;
 }
 
+// Given a bounding rect r (screen coords) and the side the arrow enters the target node,
+// return the fp that exits from the opposite side of the anchor element.
+function anchorFpFromSide(r, side) {
+  if (side === 'left')   return { x: r.right,              y: r.top + r.height / 2 };
+  if (side === 'right')  return { x: r.left,               y: r.top + r.height / 2 };
+  if (side === 'top')    return { x: r.left + r.width / 2, y: r.bottom };
+  /* bottom */           return { x: r.left + r.width / 2, y: r.top };
+}
+
 // Compute the exit point on the edge of `from` node in the direction of `to` node.
 // Both nodes are plain objects with { x, y, w, h } in canvas coordinates.
 function edgePoint(from, to) {
@@ -1435,10 +1444,10 @@ function targetEntryPoint(fp, tn) {
   const right  = c2s(tn.x + tn.w,       tn.y + tn.h * 0.25);
   const bottom = c2s(tn.x + tn.w * 0.2, tn.y + tn.h);
 
-  if (fp.x > nBR.x) return right;   // source clearly to the right
-  if (fp.y > nBR.y && fp.x > nTL.x) return bottom;  // source clearly below
-  if (fp.y < nTL.y && fp.x > nTL.x) return top;     // source clearly above
-  return left;                       // default: left edge, upper area
+  if (fp.x > nBR.x) return { point: right,  side: 'right' };
+  if (fp.y > nBR.y && fp.x > nTL.x) return { point: bottom, side: 'bottom' };
+  if (fp.y < nTL.y && fp.x > nTL.x) return { point: top,    side: 'top' };
+  return { point: left, side: 'left' };  // default: left edge, upper area
 }
 
 function renderLinks() {
@@ -1450,15 +1459,16 @@ function renderLinks() {
 
     // Start point: anchor element position if available, else node edge
     const anchorEl = document.querySelector(`.link-anchor[data-lid="${lnk.id}"]`);
-    let fp;
+    let fp, anchorRect;
     if (anchorEl) {
-      const r = anchorEl.getBoundingClientRect();
-      fp = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      anchorRect = anchorEl.getBoundingClientRect();
+      fp = { x: anchorRect.left + anchorRect.width / 2, y: anchorRect.top + anchorRect.height / 2 };
     } else {
       fp = c2s(edgePoint(fn, tn).x, edgePoint(fn, tn).y);
     }
 
-    const tp = targetEntryPoint(fp, tn);
+    const { point: tp, side } = targetEntryPoint(fp, tn);
+    if (anchorEl) fp = anchorFpFromSide(anchorRect, side);
 
     const dx = tp.x - fp.x;
     const dy = tp.y - fp.y;
@@ -1500,9 +1510,9 @@ function svgE(tag, attrs = {}) {
 // ═══════════════════════════════════════════════════════
 // LINK MODE
 // ═══════════════════════════════════════════════════════
-function enterLinkMode(fromId, text, anchorPos = null) {
+function enterLinkMode(fromId, text, anchorRect = null) {
   S.linkMode = true;
-  S.pending = { fromId, text, anchorPos };
+  S.pending = { fromId, text, anchorRect };
   document.body.classList.add('link-mode');
   setStatus(`🔗 Click the target block — "${text}" → ? (Esc to cancel)`);
 }
@@ -1963,9 +1973,12 @@ wrap.addEventListener('mousemove', e => {
     return;
   }
 
-  const fp = S.pending.anchorPos ?? c2s(edgePoint(fn, tn).x, edgePoint(fn, tn).y);
-
-  const tp = targetEntryPoint(fp, tn);
+  const ar = S.pending.anchorRect;
+  let fp = ar
+    ? { x: ar.left + ar.width / 2, y: ar.top + ar.height / 2 }
+    : c2s(edgePoint(fn, tn).x, edgePoint(fn, tn).y);
+  const { point: tp, side } = targetEntryPoint(fp, tn);
+  if (ar) fp = anchorFpFromSide(ar, side);
   const dx = tp.x - fp.x;
   const dy = tp.y - fp.y;
   const d = `M${fp.x},${fp.y} C${fp.x + dx * 0.45},${fp.y + dy * 0.1} ${tp.x - dx * 0.45},${tp.y - dy * 0.1} ${tp.x},${tp.y}`;
@@ -2003,12 +2016,12 @@ document.addEventListener('mouseup', e => {
   linkTip.style.left    = (rect.left + rect.width / 2) + 'px';
   linkTip.style.top     = Math.max(8, rect.top - tipHeight - 8) + 'px';
 
-  const anchorPos = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  const anchorRect = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
 
   linkTipLink.onclick = () => {
     sel.removeAllRanges();
     linkTip.style.display = 'none';
-    enterLinkMode(fromId, text, anchorPos);
+    enterLinkMode(fromId, text, anchorRect);
   };
 
   linkTipNewBlock.onclick = () => {
@@ -2016,7 +2029,7 @@ document.addEventListener('mouseup', e => {
     linkTip.style.display = 'none';
     const fn = S.nodes.find(n => n.id === fromId);
     const nx = fn ? fn.x + fn.w + 60 : 100;
-    const ny = s2c(anchorPos.x, anchorPos.y).y;
+    const ny = s2c(anchorRect.left + anchorRect.width / 2, anchorRect.top + anchorRect.height / 2).y;
     const newNode = addNode(nx, ny);
     createLink(fromId, text, newNode.id);
     renderLinks();
