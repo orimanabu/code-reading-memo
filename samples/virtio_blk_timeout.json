@@ -1,5 +1,6 @@
 {
-  "dataVersion": "1.0",
+  "dataVersion": "3.0",
+  "savedAt": 1776525526852,
   "canvasTitle": "virtio_blk timeout",
   "nodes": [
     {
@@ -951,10 +952,18 @@
     "y": 586.3283513902047,
     "scale": 0.5467360184935187
   },
-  "gitConfig": {
-    "url": "",
-    "branch": "",
-    "tag": "",
-    "commitHash": ""
+  "globalConfig": {
+    "description": "virtio_blkにタイムアウト処理があるかどうかを調査したメモ",
+    "repositories": [
+      {
+        "nickname": "rhel-9",
+        "url": "https://gitlab.com/redhat/rhel/src/kernel/rhel-9",
+        "branch": "",
+        "tag": "kernel-5.14.0-570.60.1.el9_6",
+        "commitHash": "",
+        "localTree": "~/devel/src/gitlab.com/redhat/rhel/src/kernel/rhel-9",
+        "tagsFile": "~/devel/src/gitlab.com/redhat/rhel/src/kernel/rhel-9/tags"
+      }
+    ]
   }
 }
