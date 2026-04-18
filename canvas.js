@@ -1436,8 +1436,8 @@ function targetEntryPoint(fp, tn) {
   const bottom = c2s(tn.x + tn.w * 0.2, tn.y + tn.h);
 
   if (fp.x > nBR.x) return right;   // source clearly to the right
-  if (fp.y > nBR.y && fp.x > tn.x) return bottom;  // source clearly below
-  if (fp.y < nTL.y && fp.x > tn.x) return top;     // source clearly above
+  if (fp.y > nBR.y && fp.x > nTL.x) return bottom;  // source clearly below
+  if (fp.y < nTL.y && fp.x > nTL.x) return top;     // source clearly above
   return left;                       // default: left edge, upper area
 }
 
