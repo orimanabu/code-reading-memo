@@ -15144,3 +15144,797 @@ No cloud environment available. Set one up at https://claude.ai/code/onboarding?
 
 ✻ Sautéed for 5m 48s
 ```
+
+```
+❯ canvas.jsをもう少しファイル分割できるか検討してください。例えばダイアログ部分を別ファイルに切り出すことはできますか
+
+⏺ Explore(Explore canvas.js structure and dialogs)
+  ⎿  Done (19 tool uses · 55.9k tokens · 1m 21s)
+  (ctrl+o to expand)
+
+⏺ 詳細な分析が完了しました。計画を立てます。
+
+⏺ Plan(Plan dialog extraction to separate module)
+  ⎿  Done (25 tool uses · 47.4k tokens · 2m 21s)
+  (ctrl+o to expand)
+
+⏺ 計画の裏付けのために、いくつかの重要な行を確認します。
+
+  Searched for 5 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Bash(git show HEAD --stat && git show HEAD:canvas-utils.js | grep -n "DATA_VERSION")
+  ⎿  commit 0f91a6cb7c1af1c535aaadd824213a9ceda96ab8
+     Author: Manabu Ori <manabu.ori@gmail.com>
+     Date:   Sun Apr 19 20:16:39 2026 +0900
+     … +16 lines (ctrl+o to expand)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Bash(git log --oneline -5 && git show HEAD~1:canvas.js | grep -n "DATA_VERSION" | head -5)
+  ⎿  0f91a6c refactor: extract pure utility functions into canvas-utils.js ES module
+     1582c6a update to dataVersion 3.0
+     42c7476 feat: redesign Global Config dialog with multi-repo support and data version 3.0
+     … +4 lines (ctrl+o to expand)
+
+⏺ 必要な情報がそろいました。プランを作成します。
+
+⏺ Updated plan
+  ⎿  /plan to preview
+
+⏺ User approved Claude's plan
+  ⎿  Plan saved to: ~/.claude/plans/partitioned-noodling-castle.md · /plan to edit
+     Plan: Extract dialog code into canvas-dialogs.js
+
+     Context
+
+     canvas.js (3469 lines) contains 6 dialog IIFEs spanning lines 2506–3427, plus git utility functions used only by those dialogs. Extracting them
+      into canvas-dialogs.js reduces canvas.js to ~2500 lines, gives dialogs their own logical home, and follows the pattern already established
+     with canvas-utils.js.
+
+     The user specifically asked whether dialog code can be split into a separate file — the answer is yes, and the approach is clean dependency
+     injection via an initDialogs(deps) function.
+
+     Pre-existing bug to fix (prerequisite)
+
+     canvas.js line 1 imports DATA_VERSION from canvas-utils.js, but canvas-utils.js does not export it. This was accidentally dropped in the last
+     refactoring commit (0f91a6c). Original value was '3.0'.
+
+     Fix: Add export const DATA_VERSION = '3.0'; to canvas-utils.js.
+
+     New file: canvas-dialogs.js
+
+     Structure
+
+     import { esc, NODE_COLORS } from './canvas-utils.js';
+
+     // Module-level vars set by initDialogs
+     let S, wrap, canvasTitleEl;
+     let renderNode, ndEl, autoFitNode;
+     let addBubble, addFrame, getSelectedIds;
+     let pushUndo, scheduleSave, saveState;
+     let setStatus, s2c, resizeCanvasTitleInput;
+
+     export function initDialogs(deps) {
+       ({ S, wrap, canvasTitleEl,
+          renderNode, ndEl, autoFitNode,
+          addBubble, addFrame, getSelectedIds,
+          pushUndo, scheduleSave, saveState,
+          setStatus, s2c, resizeCanvasTitleInput } = deps);
+
+       initRepoDialog();
+       initGlobalConfigDialog();
+       initGroupFrameDialog();
+       initFetchDialog();
+       initCodeSnippetdDialog();
+       initHelpDialog();
+     }
+
+     What moves here (from canvas.js)
+
+     ┌───────────────────────────────┬─────────────────┬───────────────────────────────────────────────────┐
+     │            Content            │ canvas.js lines │                       Notes                       │
+     ├───────────────────────────────┼─────────────────┼───────────────────────────────────────────────────┤
+     │ GIT UTILITIES section         │ 2506–2543       │ parseGitHubUrl, resolveBranch, resolveTag         │
+     ├───────────────────────────────┼─────────────────┼───────────────────────────────────────────────────┤
+     │ describeFetchError            │ 3063–3076       │ Move near git utilities, private to module        │
+     ├───────────────────────────────┼─────────────────┼───────────────────────────────────────────────────┤
+     │ REPO SUB-DIALOG IIFE          │ 2545–2657       │ Becomes function initRepoDialog() { ... }         │
+     ├───────────────────────────────┼─────────────────┼───────────────────────────────────────────────────┤
+     │ GLOBAL CONFIG DIALOG IIFE     │ 2659–2757       │ Becomes function initGlobalConfigDialog() { ... } │
+     ├───────────────────────────────┼─────────────────┼───────────────────────────────────────────────────┤
+     │ GROUP FRAME DIALOG IIFE       │ 2759–2834       │ Becomes function initGroupFrameDialog() { ... }   │
+     ├───────────────────────────────┼─────────────────┼───────────────────────────────────────────────────┤
+     │ GIT SNIPPET FETCH DIALOG IIFE │ 2836–2948       │ Becomes function initFetchDialog() { ... }        │
+     ├───────────────────────────────┼─────────────────┼───────────────────────────────────────────────────┤
+     │ CODESNIPPETD DIALOG IIFE      │ 3056–3410       │ Becomes function initCodeSnippetdDialog() { ... } │
+     ├───────────────────────────────┼─────────────────┼───────────────────────────────────────────────────┤
+     │ HELP DIALOG IIFE              │ 3412–3427       │ Becomes function initHelpDialog() { ... }         │
+     └───────────────────────────────┴─────────────────┴───────────────────────────────────────────────────┘
+
+     Do NOT move lines 2949–3055 (zoom controls, export/import/clear buttons) — these are unrelated to dialogs and stay in canvas.js.
+
+     IIFE → named function conversion
+
+     Each IIFE (function() { ... })(); becomes function initXxxDialog() { ... } with internal code verbatim. The module-level let vars make all
+     injected dependencies available to the internal code with no other changes.
+
+     One cross-dialog call to fix
+
+     Inside initGlobalConfigDialog, there are two bare calls to openRepoDialog(...) (currently lines 2705, 2726). These work now because both IIFEs
+     are in the same script scope. After extraction, openRepoDialog is set on window by initRepoDialog() (which runs first). Change these two call
+     sites to:
+     - openRepoDialog(editingRepos[i], ...) → window.openRepoDialog(editingRepos[i], ...)
+     - openRepoDialog(null, ...) → window.openRepoDialog(null, ...)
+
+     Changes to canvas.js
+
+     1. Add import at line 1:
+     import { initDialogs } from './canvas-dialogs.js';
+     1. (extend the existing import block)
+     2. Remove lines 2506–3427 (all dialog and git utility code extracted above)
+     3. Add initDialogs call just before the // INIT async IIFE (currently line 3429, will shift after removal):
+     initDialogs({
+       S, wrap, canvasTitleEl,
+       renderNode, ndEl, autoFitNode,
+       addBubble, addFrame, getSelectedIds,
+       pushUndo, scheduleSave, saveState,
+       setStatus, s2c, resizeCanvasTitleInput,
+     });
+
+     canvas.html — no changes needed
+
+     The browser's module system auto-resolves the transitive import chain:
+     canvas.html → canvas.js → canvas-dialogs.js → canvas-utils.js
+
+     Why bare openFetchDialog / openCodeSnippetdDialog calls still work
+
+     canvas.js lines 280 and 287 call these as bare identifiers (not window.openFetchDialog). This works because window.openFetchDialog = fn creates
+      a property on the global object, which is accessible via the scope chain even in ES module strict mode. After extraction, initDialogs() sets
+     these window.* properties before any user interaction, so they remain accessible.
+
+     Implementation order
+
+     1. Fix DATA_VERSION bug in canvas-utils.js
+     2. Create canvas-dialogs.js from scratch with the skeleton
+     3. Move git utility functions into canvas-dialogs.js
+     4. Move dialogs one by one: repo → global config → group frame → fetch → codesnippetd → help
+     5. Fix the two openRepoDialog → window.openRepoDialog call sites
+     6. Update canvas.js: add import, remove extracted lines, add initDialogs({...}) call
+
+     Verification
+
+     - Open canvas.html via local server (e.g. npx serve .)
+     - Click "⚙ Config" → Global Config dialog opens, repo add/edit works
+     - Click "💬 Bubble" button (inside Global Config dialog) → bubble added
+     - Double-click a node header → click the git icon → Fetch dialog opens
+     - Click Codesnippetd dialog button → dialog opens with tabs
+     - Select nodes → click group button → Group Frame dialog opens
+     - Click "?" → Help dialog opens
+     - Run npm test — all tests pass
+
+     Critical files
+
+     - /Users/ori/devel/src/github.com/orimanabu/code-canvas/canvas.js (modify)
+     - /Users/ori/devel/src/github.com/orimanabu/code-canvas/canvas-utils.js (add DATA_VERSION export)
+     - /Users/ori/devel/src/github.com/orimanabu/code-canvas/canvas-dialogs.js (create new)
+
+⏺ 実装を開始します。まず canvas-utils.js の DATA_VERSION バグを修正し、次に canvas.js のダイアログ部分を読み取ります。
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ 全セクションを確認できました。実装を開始します。
+
+  Step 1: canvas-utils.js に DATA_VERSION を追加
+
+⏺ Update(canvas-utils.js)
+  ⎿  Added 5 lines
+      1  // ═══════════════════════════════════════════════════════
+      2 +// CONSTANTS
+      3 +// ═══════════════════════════════════════════════════════
+      4 +export const DATA_VERSION = '3.0';
+      5 +
+      6 +// ═══════════════════════════════════════════════════════
+      7  // UTILS
+      8  // ═══════════════════════════════════════════════════════
+      9  export function esc(s) {
+
+⏺ Step 2: canvas-dialogs.js を新規作成
+
+⏺ Write(canvas-dialogs.js)
+  ⎿  Wrote 838 lines to canvas-dialogs.js
+       1 import { esc, NODE_COLORS } from './canvas-utils.js';
+       2
+       3 // Module-level vars populated by initDialogs()
+       4 let S, wrap, canvasTitleEl;
+       5 let renderNode, ndEl, autoFitNode;
+       6 let addBubble, addFrame, getSelectedIds;
+       7 let pushUndo, scheduleSave, saveState;
+       8 let setStatus, s2c, resizeCanvasTitleInput;
+       9
+      10 export function initDialogs(deps) {
+     … +828 lines (ctrl+o to expand)
+
+⏺ Step 3: canvas.js を更新 — import 追加、ダイアログ部分を削除、initDialogs 呼び出しを追加
+
+⏺ Update(canvas.js)
+  ⎿  Added 1 line
+      1  import { DATA_VERSION, esc, EXT_LANG, langFromPath, NODE_COLORS,
+      2           injectAnchor, splitHtmlLines, addLineNumbers,
+      3           roundedRectRayHit, anchorFpFromSide, edgePoint } from './canvas-utils.js';
+      4 +import { initDialogs } from './canvas-dialogs.js';
+      5
+      6  // ═══════════════════════════════════════════════════════
+      7  // STATE
+
+⏺ 次に、ダイアログ部分とgitユーティリティ（行2506〜3427）を削除します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 削除 1: GIT UTILITIES + 最初の4ダイアログ（行2506〜2949）
+
+⏺ Update(canvas.js)
+  ⎿  Removed 444 lines
+      2504    }
+      2505  });
+      2506
+      2507 -// ═══════════════════════════════════════════════════════
+      2508 -// GIT UTILITIES
+      2509 -// ═══════════════════════════════════════════════════════
+      2510 -function parseGitHubUrl(url) {
+      2511 -  const m = url.trim().match(/github\.com[:/]([^/]+)\/([^/.?\s]+)/);
+      2512 -  return m ? { owner: m[1], repo: m[2] } : null;
+      2513 -}
+      2514 -
+      2515 -// ═══════════════════════════════════════════════════════
+      2516 -// GIT RESOLVE HELPERS (shared)
+      2517 -// ═══════════════════════════════════════════════════════
+      2518 -async function resolveBranch(owner, repo, branch) {
+      2519 -  const res = await fetch(
+      2520 -    `https://api.github.com/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}`
+      2521 -  );
+      2522 -  if (!res.ok) throw new Error(`branch not found (HTTP ${res.status})`);
+      2523 -  const data = await res.json();
+      2524 -  return data.commit?.sha ?? null;
+      2525 -}
+      2526 -
+      2527 -async function resolveTag(owner, repo, tag) {
+      2528 -  const res = await fetch(
+      2529 -    `https://api.github.com/repos/${owner}/${repo}/git/ref/tags/${encodeURIComponent(tag)}`
+      2530 -  );
+      2531 -  if (!res.ok) throw new Error(`tag not found (HTTP ${res.status})`);
+      2532 -  const data = await res.json();
+      2533 -  if (!data.object) throw new Error('unexpected API response');
+      2534 -  if (data.object.type === 'commit') return data.object.sha;
+      2535 -  if (data.object.type === 'tag') {
+      2536 -    const res2 = await fetch(
+      2537 -      `https://api.github.com/repos/${owner}/${repo}/git/tags/${data.object.sha}`
+      2538 -    );
+      2539 -    if (!res2.ok) throw new Error(`tag object not found (HTTP ${res2.status})`);
+      2540 -    const data2 = await res2.json();
+      2541 -    return data2.object?.sha ?? null;
+      2542 -  }
+      2543 -  return null;
+      2544 -}
+      2545 -
+      2546 -// ═══════════════════════════════════════════════════════
+      2547 -// REPO SUB-DIALOG
+      2548 -// ═══════════════════════════════════════════════════════
+      2549 -(function () {
+      2550 -  const overlay      = document.getElementById('repo-dialog-overlay');
+      2551 -  const nicknameEl   = document.getElementById('repo-nickname');
+      2552 -  const urlEl        = document.getElementById('repo-url');
+      2553 -  const branchEl     = document.getElementById('repo-branch');
+      2554 -  const tagEl        = document.getElementById('repo-tag');
+      2555 -  const commitEl     = document.getElementById('repo-commit');
+      2556 -  const noteEl       = document.getElementById('repo-resolve-note');
+      2557 -  const localTreeEl  = document.getElementById('repo-local-tree');
+      2558 -  const tagsFileEl   = document.getElementById('repo-tags-file');
+      2559 -  const saveBtn      = document.getElementById('repo-save');
+      2560 -  const cancelBtn    = document.getElementById('repo-cancel');
+      2561 -
+      2562 -  let _onSave = null;
+      2563 -
+      2564 -  function setNote(msg, type) {
+      2565 -    noteEl.textContent = msg;
+      2566 -    noteEl.className = 'git-form-note' + (type ? ' ' + type : '');
+      2567 -  }
+      2568 -
+      2569 -  // Auto-fill nickname from URL last path segment (only when not manually edited)
+      2570 -  urlEl.addEventListener('input', () => {
+      2571 -    if (nicknameEl.dataset.manuallyEdited) return;
+      2572 -    const parts = urlEl.value.trim().replace(/\/$/, '').split('/').filter(Boolean);
+      2573 -    nicknameEl.value = parts[parts.length - 1] || '';
+      2574 -  });
+      2575 -  nicknameEl.addEventListener('input', () => {
+      2576 -    nicknameEl.dataset.manuallyEdited = '1';
+      2577 -  });
+      2578 -
+      2579 -  // Auto-fill tags file from local source tree
+      2580 -  localTreeEl.addEventListener('input', () => {
+      2581 -    const tree = localTreeEl.value.trim().replace(/\/$/, '');
+      2582 -    tagsFileEl.value = tree ? tree + '/tags' : '';
+      2583 -  });
+      2584 -
+      2585 -  function close() { overlay.style.display = 'none'; }
+      2586 -
+      2587 -  window.openRepoDialog = function (existingRepo, onSave) {
+      2588 -    _onSave = onSave;
+      2589 -    nicknameEl.dataset.manuallyEdited  = existingRepo ? '1' : '';
+      2590 -    nicknameEl.value  = existingRepo?.nickname   ?? '';
+      2591 -    urlEl.value       = existingRepo?.url        ?? '';
+      2592 -    branchEl.value    = existingRepo?.branch     ?? '';
+      2593 -    tagEl.value       = existingRepo?.tag        ?? '';
+      2594 -    commitEl.value    = existingRepo?.commitHash ?? '';
+      2595 -    localTreeEl.value = existingRepo?.localTree  ?? '';
+      2596 -    tagsFileEl.value  = existingRepo?.tagsFile   ?? '';
+      2597 -    setNote('', '');
+      2598 -    overlay.style.display = 'flex';
+      2599 -    urlEl.focus();
+      2600 -  };
+      2601 -
+      2602 -  saveBtn.addEventListener('click', async () => {
+      2603 -    const nickname  = nicknameEl.value.trim();
+      2604 -    const url       = urlEl.value.trim();
+      2605 -    const branch    = branchEl.value.trim();
+      2606 -    const tag       = tagEl.value.trim();
+      2607 -    let   commit    = commitEl.value.trim();
+      2608 -    const localTree = localTreeEl.value.trim();
+      2609 -    const tagsFile  = tagsFileEl.value.trim();
+      2610 -
+      2611 -    if (!nickname) { setNote('⚠ Please enter a nickname.', 'warn'); return; }
+      2612 -    if (!url)      { setNote('⚠ Please enter a repository URL.', 'warn'); return; }
+      2613 -
+      2614 -    if (branch && tag) {
+      2615 -      setNote('⚠ Both branch and tag are filled. Please specify only one.', 'warn');
+      2616 -      return;
+      2617 -    }
+      2618 -
+      2619 -    const needResolve = (branch || tag) && !commit;
+      2620 -    if (needResolve) {
+      2621 -      const gh = parseGitHubUrl(url);
+      2622 -      if (!gh) {
+      2623 -        setNote('Not a GitHub URL — skipping commit hash auto-resolution.', 'warn');
+      2624 -        finish(nickname, url, branch, tag, '', localTree, tagsFile);
+      2625 -        return;
+      2626 -      }
+      2627 -      saveBtn.disabled = true;
+      2628 -      setNote('⏳ Resolving commit hash...', '');
+      2629 -      try {
+      2630 -        if (branch) {
+      2631 -          commit = await resolveBranch(gh.owner, gh.repo, branch);
+      2632 -          setNote(`✓ HEAD of ${branch}: ${commit.slice(0, 12)}…`, 'ok');
+      2633 -        } else {
+      2634 -          commit = await resolveTag(gh.owner, gh.repo, tag);
+      2635 -          setNote(`✓ Commit for ${tag}: ${commit.slice(0, 12)}…`, 'ok');
+      2636 -        }
+      2637 -      } catch (e) {
+      2638 -        setNote(`✗ Resolution failed: ${e.message}`, 'err');
+      2639 -        saveBtn.disabled = false;
+      2640 -        return;
+      2641 -      }
+      2642 -      saveBtn.disabled = false;
+      2643 -    }
+      2644 -
+      2645 -    finish(nickname, url, branch, tag, commit, localTree, tagsFile);
+      2646 -  });
+      2647 -
+      2648 -  function finish(nickname, url, branch, tag, commitHash, localTree, tagsFile) {
+      2649 -    if (_onSave) _onSave({ nickname, url, branch, tag, commitHash, localTree, tagsFile });
+      2650 -    close();
+      2651 -  }
+      2652 -
+      2653 -  cancelBtn.addEventListener('click', close);
+      2654 -  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+      2655 -  document.addEventListener('keydown', e => {
+      2656 -    if (e.key === 'Escape' && overlay.style.display !== 'none') close();
+      2657 -  });
+      2658 -})();
+      2659 -
+      2660 -// ═══════════════════════════════════════════════════════
+      2661 -// GLOBAL CONFIG DIALOG
+      2662 -// ═══════════════════════════════════════════════════════
+      2663 -(function () {
+      2664 -  const overlay   = document.getElementById('global-config-overlay');
+      2665 -  const titleEl   = document.getElementById('gc-canvas-title');
+      2666 -  const descEl    = document.getElementById('gc-description');
+      2667 -  const reposWrap = document.getElementById('gc-repos-wrap');
+      2668 -  const addBtn    = document.getElementById('gc-add-repo');
+      2669 -  const saveBtn   = document.getElementById('gc-save');
+      2670 -  const cancelBtn = document.getElementById('gc-cancel');
+      2671 -
+      2672 -  let editingRepos = [];
+      2673 -
+      2674 -  function renderReposTable() {
+      2675 -    if (editingRepos.length === 0) {
+      2676 -      reposWrap.innerHTML = '<div class="gc-repos-empty">No repositories configured.</div>';
+      2677 -      return;
+      2678 -    }
+      2679 -    const rows = editingRepos.map((r, i) => {
+      2680 -      const hash = r.commitHash ? r.commitHash.slice(0, 12) + '…' : '—';
+      2681 -      return `<tr>
+      2682 -        <td title="${esc(r.nickname)}">${esc(r.nickname)}</td>
+      2683 -        <td title="${esc(r.url)}">${esc(r.url)}</td>
+      2684 -        <td>${esc(r.branch || '—')}</td>
+      2685 -        <td>${esc(r.tag || '—')}</td>
+      2686 -        <td>${esc(hash)}</td>
+      2687 -        <td class="gc-repo-actions">
+      2688 -          <button class="gc-repo-btn" data-action="edit" data-i="${i}">Edit</button>
+      2689 -          <button class="gc-repo-btn del" data-action="del" data-i="${i}">Delete</button>
+      2690 -        </td>
+      2691 -      </tr>`;
+      2692 -    }).join('');
+      2693 -    reposWrap.innerHTML = `<table class="gc-repos-table">
+      2694 -      <thead><tr>
+      2695 -        <th>Nickname</th><th>URL</th><th>Branch</th><th>Tag</th><th>Commit Hash</th><th></th>
+      2696 -      </tr></thead>
+      2697 -      <tbody>${rows}</tbody>
+      2698 -    </table>`;
+      2699 -    reposWrap.querySelectorAll('[data-action]').forEach(btn => {
+      2700 -      btn.addEventListener('click', () => {
+      2701 -        const i = parseInt(btn.dataset.i, 10);
+      2702 -        if (btn.dataset.action === 'del') {
+      2703 -          editingRepos.splice(i, 1);
+      2704 -          renderReposTable();
+      2705 -        } else {
+      2706 -          openRepoDialog(editingRepos[i], updated => {
+      2707 -            editingRepos[i] = updated;
+      2708 -            renderReposTable();
+      2709 -          });
+      2710 -        }
+      2711 -      });
+      2712 -    });
+      2713 -  }
+      2714 -
+      2715 -  function open() {
+      2716 -    titleEl.value = canvasTitleEl.value;
+      2717 -    descEl.value  = S.globalConfig.description || '';
+      2718 -    editingRepos  = (S.globalConfig.repositories || []).map(r => ({ ...r }));
+      2719 -    renderReposTable();
+      2720 -    overlay.style.display = 'flex';
+      2721 -    titleEl.focus();
+      2722 -  }
+      2723 -
+      2724 -  function close() { overlay.style.display = 'none'; }
+      2725 -
+      2726 -  addBtn.addEventListener('click', () => {
+      2727 -    openRepoDialog(null, repo => {
+      2728 -      editingRepos.push(repo);
+      2729 -      renderReposTable();
+      2730 -    });
+      2731 -  });
+      2732 -
+      2733 -  saveBtn.addEventListener('click', () => {
+      2734 -    const newTitle = titleEl.value.trim() || 'Untitled canvas';
+      2735 -    canvasTitleEl.value = newTitle;
+      2736 -    document.title = newTitle;
+      2737 -    resizeCanvasTitleInput();
+      2738 -    S.globalConfig.description  = descEl.value;
+      2739 -    S.globalConfig.repositories = editingRepos.map(r => ({ ...r }));
+      2740 -    saveState();
+      2741 -    close();
+      2742 -    setStatus('Global config saved');
+      2743 -  });
+      2744 -
+      2745 -  cancelBtn.addEventListener('click', close);
+      2746 -  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+      2747 -  document.addEventListener('keydown', e => {
+      2748 -    if (e.key === 'Escape' && overlay.style.display !== 'none') close();
+      2749 -  });
+      2750 -
+      2751 -  document.getElementById('btn-add-bubble').addEventListener('click', () => {
+      2752 -    const vw = wrap.clientWidth, vh = wrap.clientHeight;
+      2753 -    const p = s2c(vw / 2, vh / 2);
+      2754 -    addBubble(p.x - 100, p.y - 50);
+      2755 -  });
+      2756 -
+      2757 -  document.getElementById('btn-global-config').addEventListener('click', open);
+      2758 -})();
+      2759 -
+      2760 -// ═══════════════════════════════════════════════════════
+      2761 -// GROUP FRAME DIALOG
+      2762 -// ═══════════════════════════════════════════════════════
+      2763 -(function () {
+      2764 -  const overlay       = document.getElementById('group-dialog-overlay');
+      2765 -  const labelInput    = document.getElementById('group-label-input');
+      2766 -  const swatchesEl    = document.getElementById('group-color-swatches');
+      2767 -  const cancelBtn     = document.getElementById('group-cancel');
+      2768 -  const okBtn         = document.getElementById('group-ok');
+      2769 -  if (!overlay || !okBtn) return;
+      2770 -  let selectedColor   = 'blue';
+      2771 -
+      2772 -  function getNonFrameSelectedIds() {
+      2773 -    return getSelectedIds().filter(id => {
+      2774 -      const n = S.nodes.find(n => n.id === id);
+      2775 -      return n && n.type !== 'frame';
+      2776 -    });
+      2777 -  }
+      2778 -
+      2779 -  function openGroupDialog() {
+      2780 -    const ids = getNonFrameSelectedIds();
+      2781 -    selectedColor = 'blue';
+      2782 -    labelInput.value = '';
+      2783 -    swatchesEl.innerHTML = NODE_COLORS.map(c =>
+      2784 -      `<span class="color-swatch${c.id === selectedColor ? ' active' : ''}" data-color="${c.id}" style="background:${c.hex}" titl
+           -e="${c.label}"></span>`
+      2785 -    ).join('');
+      2786 -    swatchesEl.querySelectorAll('.color-swatch').forEach(sw => {
+      2787 -      sw.addEventListener('click', () => {
+      2788 -        selectedColor = sw.dataset.color;
+      2789 -        swatchesEl.querySelectorAll('.color-swatch').forEach(s =>
+      2790 -          s.classList.toggle('active', s.dataset.color === selectedColor));
+      2791 -      });
+      2792 -    });
+      2793 -    overlay.style.display = 'flex';
+      2794 -    labelInput.focus();
+      2795 -  }
+      2796 -
+      2797 -  function closeDialog() { overlay.style.display = 'none'; }
+      2798 -
+      2799 -  okBtn.addEventListener('click', () => {
+      2800 -    const ids = getNonFrameSelectedIds();
+      2801 -    const PAD_H = 28, PAD_TOP = 52, PAD_BOT = 28;
+      2802 -    let fx, fy, fw, fh;
+      2803 -    if (ids.length < 1) {
+      2804 -      // No selection: place a default-sized frame at the viewport center
+      2805 -      const p = s2c(wrap.clientWidth / 2, wrap.clientHeight / 2);
+      2806 -      fw = 600; fh = 400;
+      2807 -      fx = p.x - fw / 2; fy = p.y - fh / 2;
+      2808 -    } else {
+      2809 -      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      2810 -      ids.forEach(id => {
+      2811 -        const n = S.nodes.find(n => n.id === id);
+      2812 -        if (!n) return;
+      2813 -        minX = Math.min(minX, n.x);
+      2814 -        minY = Math.min(minY, n.y);
+      2815 -        maxX = Math.max(maxX, n.x + n.w);
+      2816 -        maxY = Math.max(maxY, n.y + n.h);
+      2817 -      });
+      2818 -      fx = minX - PAD_H; fy = minY - PAD_TOP;
+      2819 -      fw = (maxX - minX) + PAD_H * 2;
+      2820 -      fh = (maxY - minY) + PAD_TOP + PAD_BOT;
+      2821 -    }
+      2822 -    addFrame(fx, fy, fw, fh, labelInput.value.trim(), selectedColor);
+      2823 -    closeDialog();
+      2824 -    setStatus('Frame created');
+      2825 -  });
+      2826 -
+      2827 -  cancelBtn.addEventListener('click', closeDialog);
+      2828 -  overlay.addEventListener('click', e => { if (e.target === overlay) closeDialog(); });
+      2829 -  labelInput.addEventListener('keydown', e => {
+      2830 -    if (e.key === 'Enter') okBtn.click();
+      2831 -    if (e.key === 'Escape') closeDialog();
+      2832 -  });
+      2833 -
+      2834 -  document.getElementById('btn-group').addEventListener('click', openGroupDialog);
+      2835 -})();
+      2836 -
+      2837 -// ═══════════════════════════════════════════════════════
+      2838 -// GIT SNIPPET FETCH DIALOG
+      2839 -// ═══════════════════════════════════════════════════════
+      2840 -(function () {
+      2841 -  const overlay    = document.getElementById('fetch-dialog-overlay');
+      2842 -  const repoSelect = document.getElementById('fetch-repo-select');
+      2843 -  const infoEl     = document.getElementById('fetch-git-info');
+      2844 -  const pathEl     = document.getElementById('fetch-path');
+      2845 -  const startEl    = document.getElementById('fetch-start');
+      2846 -  const endEl      = document.getElementById('fetch-end');
+      2847 -  const noteEl     = document.getElementById('fetch-note');
+      2848 -  const okBtn      = document.getElementById('fetch-ok');
+      2849 -  const cancelBtn  = document.getElementById('fetch-cancel');
+      2850 -  let targetNodeId = null;
+      2851 -
+      2852 -  function setNote(msg, type) {
+      2853 -    noteEl.textContent = msg;
+      2854 -    noteEl.className = 'git-form-note' + (type ? ' ' + type : '');
+      2855 -  }
+      2856 -
+      2857 -  function updateInfo() {
+      2858 -    const repos = S.globalConfig.repositories || [];
+      2859 -    if (repos.length === 0) {
+      2860 -      infoEl.textContent = '⚠ No repositories configured. Please add one via "⎇ Global Config".';
+      2861 -      infoEl.className = 'git-form-note warn';
+      2862 -      return;
+      2863 -    }
+      2864 -    const gc = repos[repoSelect.selectedIndex] ?? repos[0];
+      2865 -    if (!gc) return;
+      2866 -    const ref = gc.commitHash ? gc.commitHash.slice(0, 12) + '…'
+      2867 -              : gc.branch     ? `branch: ${gc.branch}`
+      2868 -              : gc.tag        ? `tag: ${gc.tag}`
+      2869 -              : '(no ref set)';
+      2870 -    infoEl.textContent = `${gc.url}  /  ${ref}`;
+      2871 -    infoEl.className = 'git-form-note ok';
+      2872 -  }
+      2873 -
+      2874 -  repoSelect.addEventListener('change', updateInfo);
+      2875 -
+      2876 -  function close() { overlay.style.display = 'none'; }
+      2877 -
+      2878 -  window.openFetchDialog = function (nodeId) {
+      2879 -    targetNodeId = nodeId;
+      2880 -    const n = S.nodes.find(n => n.id === nodeId);
+      2881 -    pathEl.value  = n?.filePath ?? '';
+      2882 -    startEl.value = '';
+      2883 -    endEl.value   = '';
+      2884 -    setNote('', '');
+      2885 -
+      2886 -    // Populate repo select
+      2887 -    const repos = S.globalConfig.repositories || [];
+      2888 -    repoSelect.innerHTML = repos.map(r => `<option>${esc(r.nickname)}</option>`).join('');
+      2889 -    updateInfo();
+      2890 -
+      2891 -    overlay.style.display = 'flex';
+      2892 -    pathEl.focus();
+      2893 -  };
+      2894 -
+      2895 -  okBtn.addEventListener('click', async () => {
+      2896 -    const repos = S.globalConfig.repositories || [];
+      2897 -    if (repos.length === 0) { setNote('⚠ No repositories configured. Please add one via Global Config.', 'err'); return; }
+      2898 -    const gc = repos[repoSelect.selectedIndex] ?? repos[0];
+      2899 -    if (!gc || !gc.url) { setNote('⚠ Selected repository has no URL.', 'err'); return; }
+      2900 -    const gh = parseGitHubUrl(gc.url);
+      2901 -    if (!gh) { setNote('⚠ Only GitHub URLs are supported.', 'err'); return; }
+      2902 -    const ref = gc.commitHash || gc.branch || gc.tag;
+      2903 -    if (!ref) { setNote('⚠ Please set a branch, tag, or commit hash for this repository in Global Config.', 'err'); return; }
+      2904 -
+      2905 -    const filePath  = pathEl.value.trim();
+      2906 -    const startLine = parseInt(startEl.value, 10);
+      2907 -    const endLine   = parseInt(endEl.value, 10);
+      2908 -    if (!filePath)                             { setNote('⚠ Please enter a relative path.', 'err'); return; }
+      2909 -    if (isNaN(startLine) || startLine < 1)     { setNote('⚠ Please enter a valid start line number.', 'err'); return; }
+      2910 -    if (isNaN(endLine) || endLine < startLine) { setNote('⚠ End line must be ≥ start line.', 'err'); return; }
+      2911 -
+      2912 -    okBtn.disabled = true;
+      2913 -    setNote('⏳ Fetching…', '');
+      2914 -    try {
+      2915 -      const cleanPath = filePath.replace(/^\//, '');
+      2916 -      const rawUrl = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${ref}/${cleanPath}`;
+      2917 -      const res = await fetch(rawUrl);
+      2918 -      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      2919 -      const text  = await res.text();
+      2920 -      const lines = text.split('\n');
+      2921 -      const sliced = lines.slice(startLine - 1, endLine);
+      2922 -      // Trim trailing empty line if the file ends with \n
+      2923 -      if (sliced.length > 0 && sliced[sliced.length - 1] === '') sliced.pop();
+      2924 -      const code = sliced.join('\n');
+      2925 -
+      2926 -      const n = S.nodes.find(n => n.id === targetNodeId);
+      2927 -      if (!n) { setNote('⚠ Node not found.', 'err'); okBtn.disabled = false; return; }
+      2928 -      pushUndo();
+      2929 -      n.code            = code;
+      2930 -      n.filePath        = filePath;
+      2931 -      n.lineNumberStart = startLine;
+      2932 -      n.showLineNumbers = true;
+      2933 -      renderNode(n, ndEl(n.id));
+      2934 -      autoFitNode(n);
+      2935 -      scheduleSave();
+      2936 -      setNote(`✓ Fetched ${sliced.length} line(s).`, 'ok');
+      2937 -      setTimeout(close, 900);
+      2938 -    } catch (e) {
+      2939 -      setNote(`✗ Fetch failed: ${e.message}`, 'err');
+      2940 -    }
+      2941 -    okBtn.disabled = false;
+      2942 -  });
+      2943 -
+      2944 -  cancelBtn.addEventListener('click', close);
+      2945 -  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+      2946 -  document.addEventListener('keydown', e => {
+      2947 -    if (e.key === 'Escape' && overlay.style.display !== 'none') close();
+      2948 -  });
+      2949 -})();
+      2950 -
+      2507  // Zoom controls
+      2508  document.getElementById('btn-zoom-out').addEventListener('click', () => {
+      2509    const cx = wrap.clientWidth / 2;
+
+⏺ 削除 2: describeFetchError + CODESNIPPETD + HELP ダイアログ（行3057〜3427）
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Now I have the exact content to remove. Let me do a single large Edit to remove CODESNIPPETD + HELP dialogs:
+
+⏺ Update(canvas.js)
+  ⎿  Removed 22 lines
+      2610    setStatus('Cleared');
+      2611  });
+      2612
+      2613 -// ═══════════════════════════════════════════════════════
+      2614 -// CODESNIPPETD DIALOG
+      2615 -// ═══════════════════════════════════════════════════════
+      2616 -
+      2617 -// Returns a human-readable error message for a failed fetch to a codesnippetd endpoint.
+      2618 -// Distinguishes mixed-content blocking (HTTPS page → HTTP server) from other network
+      2619 -// failures and HTTP-level errors so the user knows what to fix.
+      2620 -function describeFetchError(e, targetUrl) {
+      2621 -  if (e instanceof TypeError) {
+      2622 -    // TypeError means the request never reached the server (network-level failure).
+      2623 -    // On Safari, HTTPS pages cannot fetch HTTP URLs — not even localhost — and the
+      2624 -    // browser surfaces this as a TypeError with a message about "access control checks".
+      2625 -    if (location.protocol === 'https:' && targetUrl.startsWith('http://')) {
+      2626 -      return '✗ Connection blocked: this page is served over HTTPS but the codesnippetd endpoint uses HTTP. '
+      2627 -           + 'Safari blocks this (mixed content). Fix: open canvas.html from a local server (http://localhost/...) or use Chrome.
+           -';
+      2628 -    }
+      2629 -    // Server not running, wrong port, or other network failure.
+      2630 -    return `✗ Cannot reach server — is codesnippetd running? (${e.message})`;
+      2631 -  }
+      2632 -  return `✗ Fetch failed: ${e.message}`;
+      2633 -}
+      2634 -
+      2613  (function () {
+      2614    const overlay          = document.getElementById('codesnippetd-dialog-overlay');
+      2615    const endpointEl       = document.getElementById('csd-endpoint');
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 大きなブロックの削除に sed を使います（Edit ツールでは数百行のマッチが難しいため）。
+
+  Searched for 4 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Bash(sed -n '2610,2614p' /Users/ori/devel/src/github.com/orimanabu/code-canvas/canvas.js && echo "---" && sed -n '2960,2968p'
+      /Users/ori/devel/src/github.com/orimana…)
+  ⎿    setStatus('Cleared');
+     });
+     … +12 lines (ctrl+o to expand)
+
+⏺ Bash(sed -i '' '2612,2962d' /Users/ori/devel/src/github.com/orimanabu/code-canvas/canvas.js)
+  ⎿  (No output)
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ ダイアログコードが正常に削除されました。initDialogs 呼び出しを INIT ブロックの前に追加します。
+
+⏺ Update(canvas.js)
+  ⎿  Added 8 lines
+      2610    setStatus('Cleared');
+      2611  });
+      2612
+      2613 +initDialogs({
+      2614 +  S, wrap, canvasTitleEl,
+      2615 +  renderNode, ndEl, autoFitNode,
+      2616 +  addBubble, addFrame, getSelectedIds,
+      2617 +  pushUndo, scheduleSave, saveState,
+      2618 +  setStatus, s2c, resizeCanvasTitleInput,
+      2619 +});
+      2620 +
+      2621  // ═══════════════════════════════════════════════════════
+      2622  // INIT
+      2623  // ═══════════════════════════════════════════════════════
+
+⏺ テストを実行して確認します。
+
+⏺ Bash(npm test 2>&1)
+  ⎿  > test
+     > vitest run
+     … +46 lines (ctrl+o to expand)
+
+⏺ 全106テストが通過しました。最終的なファイル行数を確認します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 完了しました。変更の概要：
+
+  ┌───────────────────┬────────┬─────────────────────────────────┐
+  │     ファイル      │ 変更前 │             変更後              │
+  ├───────────────────┼────────┼─────────────────────────────────┤
+  │ canvas.js         │ 3469行 │ 2661行 (-808行)                 │
+  ├───────────────────┼────────┼─────────────────────────────────┤
+  │ canvas-dialogs.js │ (新規) │ 838行                           │
+  ├───────────────────┼────────┼─────────────────────────────────┤
+  │ canvas-utils.js   │ 224行  │ 229行 (+5行、DATA_VERSION 追加) │
+  └───────────────────┴────────┴─────────────────────────────────┘
+
+  実施した変更：
+
+  1. canvas-utils.js: DATA_VERSION = '3.0' を追加（前回リファクタリングで漏れていたバグ修正）
+  2. canvas-dialogs.js (新規): 以下を initDialogs(deps) という単一のエクスポート関数にまとめて移動
+    - Git ユーティリティ (parseGitHubUrl, resolveBranch, resolveTag, describeFetchError)
+    - 6つのダイアログ IIFE → initRepoDialog, initGlobalConfigDialog, initGroupFrameDialog, initFetchDialog, initCodeSnippetdDialog, initHelpDialog
+  3. canvas.js:
+    - import { initDialogs } from './canvas-dialogs.js' を追加
+    - ダイアログ部分 (旧行 2506〜3427) を削除
+    - INIT ブロック直前に initDialogs({...}) 呼び出しを追加
+
+  canvas.html の変更は不要です（ブラウザのESモジュールシステムが推移的インポートを自動解決します）。
+
+✻ Cogitated for 12m 36s
+```
