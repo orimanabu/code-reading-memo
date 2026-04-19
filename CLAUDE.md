@@ -4,15 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-"∞ Code Canvas" is a browser application for taking structured notes while reading source code. No build step required. Open `canvas.html` directly in a browser — works from both a local file server and directly via `file://`.
+"∞ Code Canvas" is a browser application for taking structured notes while reading source code. No build step required. Open `canvas.html` via a local server or GitHub Pages (ES modules require HTTP/HTTPS — `file://` is not supported).
 
 ## File structure
 
 | File | Description |
 |------|-------------|
-| `canvas.html` | Entry point. Minimal DOM: toolbar, canvas container, SVG layer, modal dialogs, status bar. Loads `canvas.css` and `canvas.js` as a plain script. |
+| `canvas.html` | Entry point. Minimal DOM: toolbar, canvas container, SVG layer, modal dialogs, status bar. Loads `canvas.css` and `canvas.js` as an ES module (`<script type="module">`). |
 | `canvas.css` | All styles. Two major visual systems: code block nodes (`.node`, `.node-header`, `.node-body`) and bubble/comment nodes (`.bubble-node`, `.bubble-body`, `.bubble-tail-poly`). |
-| `canvas.js` | Main application logic. Organized by sections marked with `// ═══` banners (see below). Self-contained plain script with no external JS dependencies. |
+| `canvas-utils.js` | Pure utility functions — no DOM, no state. ES module with named exports. Fully unit-testable without jsdom. |
+| `canvas.js` | Main application logic. ES module that imports from `canvas-utils.js`. Organized by sections marked with `// ═══` banners (see below). |
 | `package.json` / `vitest.config.js` | Test tooling (Vitest). Run tests with `npm test`. |
 
 ## Architecture
@@ -28,13 +29,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V, Escape, etc.)
 - **PERSISTENCE** — `saveState()` / `loadState()` via `localStorage`, export/import as JSON, Git snippet fetch via GitHub raw URLs
 
-**Pure utility functions** (defined at the top of `canvas.js`, before the STATE section):
+**Pure utility functions** (in `canvas-utils.js`; imported by `canvas.js`):
 
 - `esc(s)` — HTML escape
 - `EXT_LANG`, `langFromPath(filePath)` — file extension → highlight.js language name
 - `injectAnchor(html, rawText, linkId)` — inject link-anchor span into highlighted HTML
 - `splitHtmlLines(html)`, `addLineNumbers(html, start)` — per-line HTML rendering with correct span handling
 - `roundedRectRayHit(...)` — ray vs. rounded-rect intersection (bubble tail geometry)
+- `anchorFpFromSide(r, side)` — exit point from an anchor element's bounding rect
 - `edgePoint(from, to)` — exit point on a node's edge toward another node (arrow geometry)
 
 ## Key patterns

@@ -14402,3 +14402,745 @@ file」の2つの入力行を追加してください。tags fileのデフォル
 
 ⏺ DATA_VERSION = '3.0' に戻し、2.0→3.0 のマイグレーション分岐も復元しました。
 ```
+
+```
+❯ canvas.jsが大分大きくなりました。複数のファイルに分割することを検討してください。ファイル数はあまり増やしたくないです。今いくつかテストコードがあ
+りますが、ファイル分割することでテストカバレッジを上げられるならそうしたいです。あと、github
+pagesでホスティングしているのですが、canvas.jsを分割しても同じくgithub pagesでホスティングできるようにしたいです。
+
+⏺ Explore(Explore canvas.js structure and tests)
+  ⎿  Done (30 tool uses · 48.0k tokens · 1m 39s)
+  (ctrl+o to expand)
+
+⏺ Plan(Design file splitting plan)
+  ⎿  Done (38 tool uses · 69.1k tokens · 2m 30s)
+  (ctrl+o to expand)
+
+⏺ Let me verify a few key details from the plan:
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Now I have everything I need. Let me write the plan:
+
+⏺ Updated plan
+  ⎿  /plan to preview
+  ⎿  Tool use rejected
+
+⏺ Understood — waiting for the refined plan from Ultraplan.
+
+✻ Cogitated for 6m 55s
+
+❯ ◇ ultraplan
+Starting Claude Code on the web…
+
+❯ ultraplan: cannot launch remote session —
+No cloud environment available. Set one up at https://claude.ai/code/onboarding?magic=env-setup
+
+⏺ Ultraplan couldn't launch. The plan I've already written is ready — let me present it for your approval.
+  ⎿  User rejected Claude's plan:
+     ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+     │ Plan: Split canvas.js into Multiple Source Files
+     │
+     │ Context
+     │
+     │ canvas.js has grown to 3,694 lines / 143 KB. The user wants to split it into multiple files while:
+     │ 1. Keeping GitHub Pages hosting working
+     │ 2. Keeping file:// access working (documented in CLAUDE.md)
+     │ 3. Improving test coverage via better isolation of pure functions
+     │ 4. Minimizing the number of new files
+     │
+     │ Key Constraint: file:// vs ES Modules
+     │
+     │ Native ES module import statements fail in Chrome/Safari from file:// URLs (CORS). Therefore, we cannot simply convert canvas.js to ES
+     │ modules without breaking file:// support.
+     │
+     │ Solution: Concatenation build step
+     │ - Source files are plain JS (no import/export syntax)
+     │ - npm run build (via build.js) concatenates source files into the single canvas.js
+     │ - canvas.html continues loading canvas.js as a plain <script> — no change for users
+     │ - Tests import source files directly via Vitest's ESM loader
+     │ - canvas.js stays committed in the repo → GitHub Pages and file:// both continue to work
+     │
+     │ Proposed File Structure
+     │
+     │ src/
+     │   canvas-utils.js   (~230 lines) — pure utility functions, zero DOM
+     │   canvas-app.js     (~3,465 lines) — all DOM-dependent application code
+     │ canvas.js           (built output; committed; loaded by canvas.html)
+     │ build.js            (Node concatenation script)
+     │
+     │ Total new files: 3 (src/canvas-utils.js, src/canvas-app.js, build.js). canvas.js remains but becomes the built output.
+     │
+     │ File Contents
+     │
+     │ src/canvas-utils.js (lines 1–229 of current canvas.js)
+     │
+     │ Everything that has zero DOM dependency and takes only plain values:
+     │
+     │ ┌──────────────────────────────────────────────────────┬──────────────────────────┐
+     │ │                       Symbols                        │          Notes           │
+     │ ├──────────────────────────────────────────────────────┼──────────────────────────┤
+     │ │ 'use strict', DATA_VERSION                           │ header                   │
+     │ ├──────────────────────────────────────────────────────┼──────────────────────────┤
+     │ │ esc(s)                                               │ HTML escape              │
+     │ ├──────────────────────────────────────────────────────┼──────────────────────────┤
+     │ │ EXT_LANG, langFromPath(filePath)                     │ extension → language map │
+     │ ├──────────────────────────────────────────────────────┼──────────────────────────┤
+     │ │ NODE_COLORS (color palette)                          │ color definitions        │
+     │ ├──────────────────────────────────────────────────────┼──────────────────────────┤
+     │ │ injectAnchor(), splitHtmlLines(), addLineNumbers()   │ HTML line rendering      │
+     │ ├──────────────────────────────────────────────────────┼──────────────────────────┤
+     │ │ roundedRectRayHit(), anchorFpFromSide(), edgePoint() │ geometry/math            │
+     │ └──────────────────────────────────────────────────────┴──────────────────────────┘
+     │
+     │ Append at the end — a conditional export guard for Vitest (same pattern as current TEST EXPORTS):
+     │ if (typeof globalThis !== 'undefined' && typeof process !== 'undefined') {
+     │   Object.assign(globalThis, {
+     │     esc, EXT_LANG, langFromPath, NODE_COLORS,
+     │     injectAnchor, splitHtmlLines, addLineNumbers,
+     │     roundedRectRayHit, anchorFpFromSide, edgePoint,
+     │   });
+     │ }
+     │
+     │ src/canvas-app.js (lines 230–3694 of current canvas.js)
+     │
+     │ All remaining code: STATE through INIT + TEST EXPORTS. Remove the leading 'use strict'; (already present via canvas-utils.js in the
+     │ concatenated output). No other changes — all names from canvas-utils.js are in scope after concatenation.
+     │
+     │ build.js
+     │
+     │ // build.js — node build.js
+     │ import { readFileSync, writeFileSync } from 'fs';
+     │ const files = ['src/canvas-utils.js', 'src/canvas-app.js'];
+     │ const banner = `// Built ${new Date().toISOString()} — edit src/ files, not this file\n`;
+     │ const out = banner + files.map(f => readFileSync(f, 'utf8')).join('\n');
+     │ writeFileSync('canvas.js', out);
+     │ console.log(`canvas.js: ${out.length} bytes`);
+     │
+     │ package.json change
+     │
+     │ Add "build": "node build.js" to scripts.
+     │
+     │ How Tests Work After the Split
+     │
+     │ Existing tests — zero changes needed
+     │
+     │ tests/canvas-dom.test.js and tests/canvas-integration.test.js import ../canvas.js (the built output). They continue to work exactly as
+     │ before.
+     │
+     │ New pure-function tests — tests/canvas-utils.test.js
+     │
+     │ Import ../src/canvas-utils.js directly. No jsdom needed. vitest.config.js already has environment: 'node' as default — no config change
+     │ needed (the comment even already references canvas-utils.test.js).
+     │
+     │ Functions to add tests for (~20–25 new tests):
+     │ - esc — escaping &, <, >, ", coercion of non-strings
+     │ - langFromPath — known extensions (.js, .py, .go, etc.), Dockerfile by name, unknown → null, null input
+     │ - splitHtmlLines — span reopening across line boundaries
+     │ - addLineNumbers — correct line number start, trailing newline trimming
+     │ - edgePoint — all four exit directions (right/left/bottom/top)
+     │ - roundedRectRayHit — hit and miss cases
+     │
+     │ Implementation Sequence
+     │
+     │ 1. Create src/ directory
+     │ 2. Copy lines 1–229 of canvas.js → src/canvas-utils.js; append the conditional export guard
+     │ 3. Copy lines 230–3694 of canvas.js → src/canvas-app.js; remove the leading 'use strict'; line
+     │ 4. Write build.js
+     │ 5. Add "build": "node build.js" to package.json scripts
+     │ 6. Run node build.js → verify canvas.js is functionally identical to original
+     │ 7. Run npm test → all 42 existing tests pass
+     │ 8. Write tests/canvas-utils.test.js with ~20+ pure-function unit tests
+     │ 9. Run npm test → new tests pass in node environment (no jsdom)
+     │ 10. Update CLAUDE.md to document the src/ structure and npm run build workflow
+     │
+     │ Critical Files
+     │
+     │ - /Users/ori/devel/src/github.com/orimanabu/code-canvas/canvas.js — split at line 229/230 boundary
+     │ - /Users/ori/devel/src/github.com/orimanabu/code-canvas/package.json — add build script
+     │ - /Users/ori/devel/src/github.com/orimanabu/code-canvas/vitest.config.js — no changes needed (already anticipates canvas-utils.test.js via
+     │ comment)
+     │ - /Users/ori/devel/src/github.com/orimanabu/code-canvas/CLAUDE.md — update file structure table + developer workflow note
+     │ - /Users/ori/devel/src/github.com/orimanabu/code-canvas/tests/setup-dom.js — no changes needed
+     │
+     │ Verification
+     │
+     │ node build.js                # builds canvas.js
+     │ npm test                     # all tests pass (42 existing + ~20+ new)
+     │ open canvas.html             # works from file:// (single built canvas.js)
+     ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+❯ 先ほどの検討について、「file://でも動くこと」という条件は取り下げます。file://で動かなくてもよいので、もう一度検討し直してください
+
+⏺ file:// 制約を外すことで、ビルドステップ不要の ES モジュール分割が可能になります。プランを更新します。
+
+⏺ Updated plan
+  ⎿  /plan to preview
+
+⏺ User approved Claude's plan
+  ⎿  Plan saved to: ~/.claude/plans/hashed-meandering-hopcroft.md · /plan to edit
+     Plan: Split canvas.js into ES Modules
+
+     Context
+
+     canvas.js has grown to 3,694 lines / 143 KB. Split into multiple ES module files to:
+     1. Improve maintainability
+     2. Increase test coverage for pure functions (no jsdom needed)
+     3. Keep GitHub Pages hosting working
+     4. Minimize new file count
+     5. No build step required (file:// requirement dropped)
+
+     Approach: ES Modules
+
+     Since file:// is no longer required, we can use native ES module import/export. GitHub Pages serves via HTTPS so ES modules work fine.
+     canvas.html loads the entry point with <script type="module">.
+
+     No new dependencies, no build step.
+
+     Proposed File Structure
+
+     canvas-utils.js   (~230 lines)  — pure utility functions, ES module with named exports
+     canvas.js         (~3,465 lines) — all DOM-dependent app code, imports from canvas-utils.js
+
+     New files: 1 (canvas-utils.js). canvas.js is modified (not replaced) to add the import statement and remove the extracted functions.
+
+     Why only 2 files?
+
+     Extracting dialogs (canvas-dialogs.js) would create circular dependencies: canvas-dialogs.js needs S, saveState, renderLinks, etc. from
+     canvas.js, while canvas.js needs to import dialogs. Solving this properly would require extracting S into a third canvas-state.js module and
+     significant refactoring — out of scope for now. The utils extraction is clean, safe, and gives the biggest test coverage gain for minimal risk.
+
+     canvas-utils.js — What Goes In
+
+     All symbols from lines 1–229 of current canvas.js:
+
+     ┌─────────────────────────────────────┬──────────────────────────┐
+     │               Symbol                │           Type           │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ DATA_VERSION                        │ const                    │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ esc(s)                              │ pure function            │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ EXT_LANG                            │ const                    │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ langFromPath(filePath)              │ pure function            │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ NODE_COLORS                         │ const (color palette)    │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ injectAnchor(html, rawText, linkId) │ pure function            │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ splitHtmlLines(html)                │ pure function            │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ addLineNumbers(html, start)         │ pure function            │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ roundedRectRayHit(...)              │ pure function (geometry) │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ anchorFpFromSide(r, side)           │ pure function (geometry) │
+     ├─────────────────────────────────────┼──────────────────────────┤
+     │ edgePoint(from, to)                 │ pure function (geometry) │
+     └─────────────────────────────────────┴──────────────────────────┘
+
+     The file uses ES module export for each symbol. No 'use strict' needed (implicit in ES modules). No DOM access anywhere in this file.
+
+     No more conditional globalThis export guard needed — the functions are directly importable.
+
+     canvas.js Changes
+
+     1. Remove 'use strict'; (implicit in ES modules)
+     2. Remove lines 1–229 (the pure utils content extracted to canvas-utils.js)
+     3. Add at the very top:
+     import { DATA_VERSION, esc, EXT_LANG, langFromPath, NODE_COLORS,
+              injectAnchor, splitHtmlLines, addLineNumbers,
+              roundedRectRayHit, anchorFpFromSide, edgePoint } from './canvas-utils.js';
+     4. The TEST EXPORTS block at the bottom stays as-is — still works because module-scoped variables are accessible via closure in the exported
+     object.
+
+     canvas.html Change
+
+     <!-- before -->
+     <script src="canvas.js"></script>
+
+     <!-- after -->
+     <script type="module" src="canvas.js"></script>
+
+     defer behavior is automatic with type="module", so no ordering issues.
+
+     How Tests Work After the Split
+
+     Existing tests — minimal changes
+
+     tests/canvas-dom.test.js and tests/canvas-integration.test.js both import ../canvas.js. Since canvas.js now has an import statement at the top,
+      Vitest (which already runs with "type": "module" in package.json) handles it automatically. The globalThis.__canvasApp pattern still works —
+     module-scoped variables are captured by closure in the exported functions.
+
+     New pure-function tests — tests/canvas-utils.test.js
+
+     Import directly from ../canvas-utils.js. No jsdom, no DOM mocking. Runs in the default node environment (already configured in vitest.config.js
+      — the comment even references canvas-utils.test.js explicitly).
+
+     Example test cases (~20–25 new tests):
+     - esc — escaping &, <, >, ", coercion of non-strings
+     - langFromPath — known extensions (.js, .py, .go, etc.), Dockerfile by name, unknown → null, null input
+     - splitHtmlLines — span reopening across line boundaries (the tricky case)
+     - addLineNumbers — correct line number start parameter, trailing newline trimming
+     - edgePoint — target right/left/above/below the source node
+     - roundedRectRayHit — hit and miss cases
+
+     Implementation Sequence
+
+     1. Create canvas-utils.js with all pure functions from lines 1–229, using export for each
+     2. Edit canvas.js:
+       - Remove 'use strict'; (line 1)
+       - Remove lines 2–229 (the extracted content)
+       - Add import { ... } from './canvas-utils.js'; at the top
+     3. Edit canvas.html: change <script src="canvas.js"> → <script type="module" src="canvas.js">
+     4. Open canvas.html via a local server or GitHub Pages — verify the app works
+     5. Run npm test — all 42 existing tests must pass
+     6. Write tests/canvas-utils.test.js with ~20+ pure-function unit tests
+     7. Run npm test — new tests pass in node environment
+     8. Update CLAUDE.md:
+       - Add canvas-utils.js to the file structure table
+       - Note that file:// no longer works; use a local server or GitHub Pages
+       - Note that canvas.html now requires a server (HTTPS or localhost)
+
+     Critical Files
+
+     ┌────────────────────────────┬─────────────────────────────────────────────────────┐
+     │            File            │                       Change                        │
+     ├────────────────────────────┼─────────────────────────────────────────────────────┤
+     │ canvas.js                  │ Add import statement at top; remove lines 2–229     │
+     ├────────────────────────────┼─────────────────────────────────────────────────────┤
+     │ canvas-utils.js            │ New file — extracted pure functions with ES exports │
+     ├────────────────────────────┼─────────────────────────────────────────────────────┤
+     │ canvas.html                │ <script type="module" src="canvas.js">              │
+     ├────────────────────────────┼─────────────────────────────────────────────────────┤
+     │ tests/canvas-utils.test.js │ New test file — pure unit tests                     │
+     ├────────────────────────────┼─────────────────────────────────────────────────────┤
+     │ CLAUDE.md                  │ Update file table + note about file://              │
+     ├────────────────────────────┼─────────────────────────────────────────────────────┤
+     │ vitest.config.js           │ No changes needed                                   │
+     ├────────────────────────────┼─────────────────────────────────────────────────────┤
+     │ tests/setup-dom.js         │ No changes needed                                   │
+     ├────────────────────────────┼─────────────────────────────────────────────────────┤
+     │ package.json               │ No changes needed                                   │
+     └────────────────────────────┴─────────────────────────────────────────────────────┘
+
+     Verification
+
+     npm test                        # 42 existing + ~20 new tests pass
+     python3 -m http.server 8080     # open http://localhost:8080/canvas.html
+     # verify all features work: add node, add bubble, links, dialogs, save/restore
+
+⏺ 実装を始めます。まず canvas.js の lines 1–229 を正確に読みます。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Now let me check canvas.html's script loading and the existing test imports:
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ 準備完了です。実装します。
+
+  Step 1: canvas-utils.js を作成
+
+⏺ Write(canvas-utils.js)
+  ⎿  Wrote 224 lines to canvas-utils.js
+       1 // ═══════════════════════════════════════════════════════
+       2 // UTILS
+       3 // ═══════════════════════════════════════════════════════
+       4 export function esc(s) {
+       5   return String(s)
+       6     .replace(/&/g, '&amp;')
+       7     .replace(/</g, '&lt;')
+       8     .replace(/>/g, '&gt;')
+       9     .replace(/"/g, '&quot;');
+      10 }
+     … +214 lines (ctrl+o to expand)
+
+⏺ Step 2: canvas.js を修正 — lines 1–229 を削除して import 文に置き換え
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(canvas.js)
+  ⎿  Added 3 lines, removed 228 lines
+        1 -'use strict';
+        1 +import { DATA_VERSION, esc, EXT_LANG, langFromPath, NODE_COLORS,
+        2 +         injectAnchor, splitHtmlLines, addLineNumbers,
+        3 +         roundedRectRayHit, anchorFpFromSide, edgePoint } from './canvas-utils.js';
+        4
+        3 -const DATA_VERSION = '3.0';
+        4 -
+        5  // ═══════════════════════════════════════════════════════
+        6 -// UTILS
+        7 -// ═══════════════════════════════════════════════════════
+        8 -function esc(s) {
+        9 -  return String(s)
+       10 -    .replace(/&/g, '&amp;')
+       11 -    .replace(/</g, '&lt;')
+       12 -    .replace(/>/g, '&gt;')
+       13 -    .replace(/"/g, '&quot;');
+       14 -}
+       15 -
+       16 -// ═══════════════════════════════════════════════════════
+       17 -// HIGHLIGHT HELPERS
+       18 -// ═══════════════════════════════════════════════════════
+       19 -const EXT_LANG = {
+       20 -  js: 'javascript', mjs: 'javascript', cjs: 'javascript',
+       21 -  jsx: 'javascript',
+       22 -  ts: 'typescript', mts: 'typescript', cts: 'typescript',
+       23 -  tsx: 'typescript',
+       24 -  py: 'python', pyw: 'python',
+       25 -  rb: 'ruby',
+       26 -  go: 'go',
+       27 -  rs: 'rust',
+       28 -  c: 'cpp', h: 'cpp',
+       29 -  cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', hxx: 'cpp',
+       30 -  cs: 'csharp',
+       31 -  java: 'java',
+       32 -  kt: 'kotlin', kts: 'kotlin',
+       33 -  swift: 'swift',
+       34 -  sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'bash',
+       35 -  html: 'html', htm: 'html',
+       36 -  css: 'css',
+       37 -  scss: 'scss',
+       38 -  less: 'less',
+       39 -  json: 'json',
+       40 -  yaml: 'yaml', yml: 'yaml',
+       41 -  toml: 'ini',
+       42 -  xml: 'xml',
+       43 -  md: 'markdown', markdown: 'markdown',
+       44 -  sql: 'sql',
+       45 -  r: 'r',
+       46 -  lua: 'lua',
+       47 -  php: 'php',
+       48 -  pl: 'perl',
+       49 -  ex: 'elixir', exs: 'elixir',
+       50 -  erl: 'erlang',
+       51 -  hs: 'haskell',
+       52 -  scala: 'scala',
+       53 -  dart: 'dart',
+       54 -  makefile: 'makefile',
+       55 -  dockerfile: 'dockerfile',
+       56 -};
+       57 -
+       58 -function langFromPath(filePath) {
+       59 -  if (!filePath) return null;
+       60 -  const base = filePath.split('/').pop();
+       61 -  // Files without extension, e.g. Dockerfile, Makefile
+       62 -  const nameLower = base.toLowerCase();
+       63 -  if (nameLower === 'dockerfile') return 'dockerfile';
+       64 -  if (nameLower === 'makefile')   return 'makefile';
+       65 -  const ext = base.includes('.') ? base.split('.').pop().toLowerCase() : null;
+       66 -  return ext ? (EXT_LANG[ext] ?? null) : null;
+       67 -}
+       68 -
+       69 -// ═══════════════════════════════════════════════════════
+       70 -// COLOR PALETTE
+       71 -// ═══════════════════════════════════════════════════════
+       72 -const NODE_COLORS = [
+       73 -  { id: 'blue',   label: 'Blue',   hex: '#388bfd', hexLight: '#79c0ff', bgDark: '#0d1f40', bgMid: '#122040', borderMid: '#1b3f7a',
+          - titleBg: 'rgba(56,139,253,0.15)',  glow28: 'rgba(56,139,253,0.28)',  glow42: 'rgba(56,139,253,0.42)' },
+       74 -  { id: 'green',  label: 'Green',  hex: '#3fb950', hexLight: '#56d364', bgDark: '#162116', bgMid: '#1b2e1b', borderMid: '#2d4a2d',
+          - titleBg: 'rgba(63,185,80,0.15)',   glow28: 'rgba(63,185,80,0.28)',   glow42: 'rgba(63,185,80,0.42)' },
+       75 -  { id: 'purple', label: 'Purple', hex: '#a371f7', hexLight: '#bc8cff', bgDark: '#1a1035', bgMid: '#211444', borderMid: '#3d2870',
+          - titleBg: 'rgba(163,113,247,0.15)', glow28: 'rgba(163,113,247,0.28)', glow42: 'rgba(163,113,247,0.42)' },
+       76 -  { id: 'orange', label: 'Orange', hex: '#f0883e', hexLight: '#ffa657', bgDark: '#291608', bgMid: '#33190a', borderMid: '#5c3612',
+          - titleBg: 'rgba(240,136,62,0.15)',  glow28: 'rgba(240,136,62,0.28)',  glow42: 'rgba(240,136,62,0.42)' },
+       77 -  { id: 'yellow', label: 'Yellow', hex: '#e3b341', hexLight: '#f2c55a', bgDark: '#231a05', bgMid: '#2c2107', borderMid: '#4a3a0e',
+          - titleBg: 'rgba(227,179,65,0.15)',  glow28: 'rgba(227,179,65,0.28)',  glow42: 'rgba(227,179,65,0.42)' },
+       78 -  { id: 'red',    label: 'Red',    hex: '#f85149', hexLight: '#ff7b72', bgDark: '#290d0c', bgMid: '#361110', borderMid: '#6a2020',
+          - titleBg: 'rgba(248,81,73,0.15)',   glow28: 'rgba(248,81,73,0.28)',   glow42: 'rgba(248,81,73,0.42)' },
+       79 -  { id: 'cyan',   label: 'Cyan',   hex: '#39c5cf', hexLight: '#56d4dd', bgDark: '#061a1d', bgMid: '#092227', borderMid: '#144a50',
+          - titleBg: 'rgba(57,197,207,0.15)',  glow28: 'rgba(57,197,207,0.28)',  glow42: 'rgba(57,197,207,0.42)' },
+       80 -  { id: 'pink',   label: 'Pink',   hex: '#f778ba', hexLight: '#ff9ed2', bgDark: '#29091b', bgMid: '#360d24', borderMid: '#6a2050',
+          - titleBg: 'rgba(247,120,186,0.15)', glow28: 'rgba(247,120,186,0.28)', glow42: 'rgba(247,120,186,0.42)' },
+       81 -];
+       82 -
+       83 -// Replace first occurrence of `rawText` in HTML string, only inside text nodes (outside tags).
+       84 -// rawText is plain text; inside HTML it appears HTML-escaped (e.g. `>` → `&gt;`), so we must
+       85 -// escape before building the regex pattern and use the escaped form in the replacement too.
+       86 -function injectAnchor(html, rawText, linkId) {
+       87 -  const escapedText = esc(rawText);
+       88 -  const pat = escapedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+       89 -  const re  = new RegExp(pat, 'g');
+       90 -  // split on HTML tags
+       91 -  const parts = html.split(/(<[^>]*>)/);
+       92 -  return parts.map((p, i) => {
+       93 -    if (i % 2 === 1) return p; // tag → pass through
+       94 -    return p.replace(re, () =>
+       95 -      `<span class="link-anchor" data-lid="${linkId}">${escapedText}</span>`
+       96 -    );
+       97 -  }).join('');
+       98 -}
+       99 -
+      100 -// Split highlighted HTML into per-line strings, correctly handling spans that
+      101 -// cross line boundaries (e.g. highlight.js wraps ")\n{" inside one <span>).
+      102 -// At each \n we close all currently-open spans and reopen them on the next line.
+      103 -function splitHtmlLines(html) {
+      104 -  const lines = [];
+      105 -  let cur = '';
+      106 -  const openTags = []; // stack of opening tag strings, e.g. '<span class="hljs-function">'
+      107 -  let i = 0;
+      108 -  while (i < html.length) {
+      109 -    if (html[i] === '<') {
+      110 -      const end = html.indexOf('>', i);
+      111 -      if (end === -1) { cur += html.slice(i); break; }
+      112 -      const tag = html.slice(i, end + 1);
+      113 -      i = end + 1;
+      114 -      cur += tag;
+      115 -      if (tag.startsWith('</')) {
+      116 -        openTags.pop();
+      117 -      } else {
+      118 -        openTags.push(tag);
+      119 -      }
+      120 -    } else if (html[i] === '\n') {
+      121 -      // Close all open spans, emit this line, then reopen them for the next line
+      122 -      lines.push(cur + '</span>'.repeat(openTags.length));
+      123 -      cur = openTags.join('');
+      124 -      i++;
+      125 -    } else {
+      126 -      cur += html[i];
+      127 -      i++;
+      128 -    }
+      129 -  }
+      130 -  lines.push(cur);
+      131 -  return lines;
+      132 -}
+      133 -
+      134 -// Wrap highlighted HTML lines with line-number spans
+      135 -function addLineNumbers(html, start) {
+      136 -  const lines = splitHtmlLines(html);
+      137 -  // Trim trailing empty line if code ends with \n
+      138 -  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+      139 -  return lines.map((lineHtml, i) =>
+      140 -    `<span class="code-line"><span class="ln-num" data-li="${i}">${start + i}</span>${lineHtml}</span>`
+      141 -  ).join('');
+      142 -}
+      143 -
+      144 -// ═══════════════════════════════════════════════════════
+      145 -// GEOMETRY
+      146 -// ═══════════════════════════════════════════════════════
+      147 -
+      148 -// Compute the point where a ray from (ocx, ocy) toward (tipX, tipY) first
+      149 -// intersects the rounded-rect boundary defined by corners bl/br with radius r.
+      150 -// Returns { x, y, tx, ty } (hit point + tangent direction) or null.
+      151 -function roundedRectRayHit(ocx, ocy, tipX, tipY, bl, br, r) {
+      152 -  const left = bl.x, right = br.x, top = bl.y, bottom = br.y;
+      153 -  const dx = tipX - ocx, dy = tipY - ocy;
+      154 -  let bestT = Infinity, bestX, bestY, bestTx, bestTy;
+      155 -
+      156 -  function tryT(t, px, py, tx, ty) {
+      157 -    if (t > 1e-9 && t < bestT) { bestT = t; bestX = px; bestY = py; bestTx = tx; bestTy = ty; }
+      158 -  }
+      159 -
+      160 -  // Four straight edges (only the non-corner segments)
+      161 -  if (Math.abs(dx) > 1e-9) {
+      162 -    const tl = (left  - ocx) / dx;
+      163 -    if (tl > 1e-9) { const py = ocy + tl * dy; if (py >= top + r && py <= bottom - r) tryT(tl, left,  py, 0, 1); }
+      164 -    const tr = (right - ocx) / dx;
+      165 -    if (tr > 1e-9) { const py = ocy + tr * dy; if (py >= top + r && py <= bottom - r) tryT(tr, right, py, 0, 1); }
+      166 -  }
+      167 -  if (Math.abs(dy) > 1e-9) {
+      168 -    const tt = (top    - ocy) / dy;
+      169 -    if (tt > 1e-9) { const px = ocx + tt * dx; if (px >= left + r && px <= right - r) tryT(tt, px, top,    1, 0); }
+      170 -    const tb = (bottom - ocy) / dy;
+      171 -    if (tb > 1e-9) { const px = ocx + tb * dx; if (px >= left + r && px <= right - r) tryT(tb, px, bottom, 1, 0); }
+      172 -  }
+      173 -
+      174 -  // Four corner arcs — each constrained to its quadrant
+      175 -  const arcs = [
+      176 -    { cx: left  + r, cy: top    + r, xMin: left,    xMax: left  + r, yMin: top,      yMax: top    + r },
+      177 -    { cx: right - r, cy: top    + r, xMin: right- r, xMax: right,    yMin: top,      yMax: top    + r },
+      178 -    { cx: left  + r, cy: bottom - r, xMin: left,    xMax: left  + r, yMin: bottom- r, yMax: bottom    },
+      179 -    { cx: right - r, cy: bottom - r, xMin: right- r, xMax: right,    yMin: bottom- r, yMax: bottom    },
+      180 -  ];
+      181 -  for (const arc of arcs) {
+      182 -    const fx = ocx - arc.cx, fy = ocy - arc.cy;
+      183 -    const a  = dx * dx + dy * dy;
+      184 -    const b  = 2 * (fx * dx + fy * dy);
+      185 -    const c  = fx * fx + fy * fy - r * r;
+      186 -    const disc = b * b - 4 * a * c;
+      187 -    if (disc < 0) continue;
+      188 -    const sq = Math.sqrt(disc);
+      189 -    for (const sign of [1, -1]) {
+      190 -      const t = (-b + sign * sq) / (2 * a);
+      191 -      if (t <= 1e-9 || t >= bestT) continue;
+      192 -      const px = ocx + t * dx, py = ocy + t * dy;
+      193 -      if (px < arc.xMin || px > arc.xMax || py < arc.yMin || py > arc.yMax) continue;
+      194 -      // Tangent = radius vector rotated 90° CCW
+      195 -      const rx = px - arc.cx, ry = py - arc.cy;
+      196 -      tryT(t, px, py, -ry / r, rx / r);
+      197 -    }
+      198 -  }
+      199 -
+      200 -  return bestT < Infinity ? { x: bestX, y: bestY, tx: bestTx, ty: bestTy } : null;
+      201 -}
+      202 -
+      203 -// Given a bounding rect r (screen coords) and the side the arrow enters the target node,
+      204 -// return the fp that exits from the opposite side of the anchor element.
+      205 -function anchorFpFromSide(r, side) {
+      206 -  if (side === 'left')   return { x: r.right,              y: r.top + r.height / 2 };
+      207 -  if (side === 'right')  return { x: r.left,               y: r.top + r.height / 2 };
+      208 -  if (side === 'top')    return { x: r.left + r.width / 2, y: r.bottom };
+      209 -  /* bottom */           return { x: r.left + r.width / 2, y: r.top };
+      210 -}
+      211 -
+      212 -// Compute the exit point on the edge of `from` node in the direction of `to` node.
+      213 -// Both nodes are plain objects with { x, y, w, h } in canvas coordinates.
+      214 -function edgePoint(from, to) {
+      215 -  const fcx = from.x + from.w / 2, fcy = from.y + from.h / 2;
+      216 -  const tcx = to.x + to.w / 2,   tcy = to.y + to.h / 2;
+      217 -  const dx = tcx - fcx, dy = tcy - fcy;
+      218 -  const hw = from.w / 2, hh = from.h / 2;
+      219 -  if (Math.abs(dx) * hh > Math.abs(dy) * hw) {
+      220 -    const x = fcx + (dx > 0 ? hw : -hw);
+      221 -    const y = fcy + dy / (Math.abs(dx) || 1) * hw;
+      222 -    return { x, y };
+      223 -  } else {
+      224 -    const y = fcy + (dy > 0 ? hh : -hh);
+      225 -    const x = fcx + dx / (Math.abs(dy) || 1) * hh;
+      226 -    return { x, y };
+      227 -  }
+      228 -}
+      229 -
+      230 -// ═══════════════════════════════════════════════════════
+        6  // STATE
+        7  // ═══════════════════════════════════════════════════════
+        8  const S = {
+
+⏺ Step 3: canvas.html の script タグを変更
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ ctags-wasm.js との依存関係を確認します：
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ CTagsModule はグローバル変数として定義されているため、ES モジュールからも問題なくアクセスできます。canvas.html を変更します：
+
+⏺ Update(canvas.html)
+  ⎿  Added 1 line, removed 1 line
+      324  <div id="status">Ready</div>
+      325
+      326  <script src="../ctags/build-wasm/ctags-wasm.js"></script>
+      327 -<script src="canvas.js"></script>
+      327 +<script type="module" src="canvas.js"></script>
+      328  </body>
+      329  </html>
+
+⏺ Step 4: テスト実行
+
+⏺ Bash(npm test 2>&1)
+  ⎿  > test
+     > vitest run
+     … +47 lines (ctrl+o to expand)
+
+⏺ 42 テスト全て通過。Step 5: canvas-utils.test.js を作成
+
+⏺ Write(tests/canvas-utils.test.js)
+  ⎿  Wrote 275 lines to tests/canvas-utils.test.js
+       1 import { describe, it, expect } from 'vitest';
+       2 import {
+       3   esc, EXT_LANG, langFromPath, NODE_COLORS,
+       4   injectAnchor, splitHtmlLines, addLineNumbers,
+       5   roundedRectRayHit, anchorFpFromSide, edgePoint,
+       6 } from '../canvas-utils.js';
+       7
+       8 // ─── esc ────────────────────────────────────────────────
+       9 describe('esc', () => {
+      10   it('escapes ampersand', () => {
+     … +265 lines (ctrl+o to expand)
+
+⏺ Bash(npm test 2>&1)
+  ⎿  > test
+     > vitest run
+     … +48 lines (ctrl+o to expand)
+
+⏺ 全 106 テスト通過 (42 → 106)。Step 6: CLAUDE.md を更新
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 1 line, removed 1 line
+       4
+       5  ## Overview
+       6
+       7 -"∞ Code Canvas" is a browser application for taking structured notes while reading source code. No build step required. Open `canva
+         -s.html` directly in a browser — works from both a local file server and directly via `file://`.
+       7 +"∞ Code Canvas" is a browser application for taking structured notes while reading source code. No build step required. Open `canva
+         +s.html` via a local server or GitHub Pages (ES modules require HTTP/HTTPS — `file://` is not supported).
+       8
+       9  ## File structure
+      10
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 3 lines, removed 2 lines
+      10
+      11  | File | Description |
+      12  |------|-------------|
+      13 -| `canvas.html` | Entry point. Minimal DOM: toolbar, canvas container, SVG layer, modal dialogs, status bar. Loads `canvas.css` and
+         - `canvas.js` as a plain script. |
+      13 +| `canvas.html` | Entry point. Minimal DOM: toolbar, canvas container, SVG layer, modal dialogs, status bar. Loads `canvas.css` and
+         + `canvas.js` as an ES module (`<script type="module">`). |
+      14  | `canvas.css` | All styles. Two major visual systems: code block nodes (`.node`, `.node-header`, `.node-body`) and bubble/comment
+          nodes (`.bubble-node`, `.bubble-body`, `.bubble-tail-poly`). |
+      15 -| `canvas.js` | Main application logic. Organized by sections marked with `// ═══` banners (see below). Self-contained plain script
+         - with no external JS dependencies. |
+      15 +| `canvas-utils.js` | Pure utility functions — no DOM, no state. ES module with named exports. Fully unit-testable without jsdom. |
+      16 +| `canvas.js` | Main application logic. ES module that imports from `canvas-utils.js`. Organized by sections marked with `// ═══` b
+         +anners (see below). |
+      17  | `package.json` / `vitest.config.js` | Test tooling (Vitest). Run tests with `npm test`. |
+      18
+      19  ## Architecture
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 2 lines, removed 1 line
+      29  - **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V, Escape, etc.)
+      30  - **PERSISTENCE** — `saveState()` / `loadState()` via `localStorage`, export/import as JSON, Git snippet fetch via GitHub raw URLs
+      31
+      32 -**Pure utility functions** (defined at the top of `canvas.js`, before the STATE section):
+      32 +**Pure utility functions** (in `canvas-utils.js`; imported by `canvas.js`):
+      33
+      34  - `esc(s)` — HTML escape
+      35  - `EXT_LANG`, `langFromPath(filePath)` — file extension → highlight.js language name
+      36  - `injectAnchor(html, rawText, linkId)` — inject link-anchor span into highlighted HTML
+      37  - `splitHtmlLines(html)`, `addLineNumbers(html, start)` — per-line HTML rendering with correct span handling
+      38  - `roundedRectRayHit(...)` — ray vs. rounded-rect intersection (bubble tail geometry)
+      39 +- `anchorFpFromSide(r, side)` — exit point from an anchor element's bounding rect
+      40  - `edgePoint(from, to)` — exit point on a node's edge toward another node (arrow geometry)
+      41
+      42  ## Key patterns
+
+⏺ 最終確認として全テストを通します：
+
+⏺ Bash(npm test 2>&1 | tail -10)
+  ⎿  stderr | tests/canvas-integration.test.js > Node deletion cascades to links > SVG arrows are cleared when a linked node is deleted
+     Not implemented: Window's alert() method
+     … +6 lines (ctrl+o to expand)
+
+⏺ 完了です。変更の概要：
+
+  結果
+
+  ┌─────────────────┬──────────────────────────┬────────────────────────────────┐
+  │                 │          変更前          │             変更後             │
+  ├─────────────────┼──────────────────────────┼────────────────────────────────┤
+  │ canvas.js       │ 3,694 行（全てのコード） │ 3,467 行（アプリロジックのみ） │
+  ├─────────────────┼──────────────────────────┼────────────────────────────────┤
+  │ canvas-utils.js │ なし                     │ 新規作成（227 行、純粋関数）   │
+  ├─────────────────┼──────────────────────────┼────────────────────────────────┤
+  │ テスト数        │ 42                       │ 106（+64）                     │
+  └─────────────────┴──────────────────────────┴────────────────────────────────┘
+
+  何をやったか
+
+  1. canvas-utils.js を新規作成 — DOM・状態に依存しない純粋関数を ES module として抽出。export キーワードで全シンボルを公開。
+  2. canvas.js を修正 — 抽出した 229 行を削除し、先頭に import 文を追加。ES module に変換。
+  3. canvas.html を修正 — <script src="canvas.js"> → <script type="module" src="canvas.js">
+  4. tests/canvas-utils.test.js を新規作成 — jsdom 不要の純粋ユニットテスト 64
+  件追加。esc、langFromPath、splitHtmlLines、addLineNumbers、injectAnchor、edgePoint、anchorFpFromSide、roundedRectRayHit をカバー。
+  5. CLAUDE.md を更新 — ファイル構成表と概要を最新化。file:// では動かなくなったことを明記。
+
+✻ Sautéed for 5m 48s
+```
