@@ -7,6 +7,8 @@ const {
   loadState, saveState, restoreFromStorage,
   createLink, removeLink,
   copyNodes, cutNodes, pasteNodes, toggleMultiSel,
+  addFreeLine, removeFreeLine,
+  pushUndo, undo,
 } = globalThis.__canvasApp;
 
 const STORAGE_KEY = 'code-canvas-v1';
@@ -295,5 +297,63 @@ describe('Node deletion cascades to links', () => {
     removeNode(a.id);
 
     expect(document.querySelectorAll('#svg-links .lk').length).toBe(0);
+  });
+});
+
+// ─── 5. Error / edge cases ─────────────────────────────
+//
+// Scenario: various boundary or erroneous operations that should
+// degrade gracefully without throwing or corrupting state.
+describe('Error / edge cases', () => {
+  it('undo on an exhausted stack leaves state unchanged', () => {
+    S.undoStack = [];
+    addNode(0, 0, '// keep');
+    S.undoStack = []; // simulate stack already drained
+    expect(() => undo()).not.toThrow();
+    expect(S.nodes).toHaveLength(1);
+    expect(S.nodes[0].code).toBe('// keep');
+  });
+
+  it('removeFreeLine with an unknown id is a no-op', () => {
+    S.freeLines = [];
+    S.undoStack = [];
+    const line = addFreeLine([{ x: 0, y: 0 }, { x: 10, y: 10 }]);
+    expect(S.freeLines).toHaveLength(1);
+    expect(() => removeFreeLine(line.id + 9999)).not.toThrow();
+    expect(S.freeLines).toHaveLength(1);
+  });
+
+  it('createLink duplicate is silently ignored', () => {
+    const a = addNode(0,   0);
+    const b = addNode(500, 0);
+    createLink(a.id, 'fn', b.id);
+    createLink(a.id, 'fn', b.id); // duplicate — same from/text/to
+    expect(S.links).toHaveLength(1);
+  });
+
+  it('removeNode with an unknown id is a no-op', () => {
+    addNode(0, 0);
+    expect(() => removeNode(9999)).not.toThrow();
+    expect(S.nodes).toHaveLength(1);
+  });
+
+  it('free-line survives a save/restore round-trip', () => {
+    S.freeLines = [];
+    S.flid = 1;
+    S.undoStack = [];
+    const pts = [{ x: 10, y: 20 }, { x: 50, y: 80 }];
+    addFreeLine(pts, 'curve', '#ff0000', 3, '4 2');
+
+    saveState();
+    loadState({ nodes: [], links: [] });
+    restoreFromStorage();
+
+    expect(S.freeLines).toHaveLength(1);
+    const l = S.freeLines[0];
+    expect(l.lineStyle).toBe('curve');
+    expect(l.stroke).toBe('#ff0000');
+    expect(l.strokeWidth).toBe(3);
+    expect(l.dash).toBe('4 2');
+    expect(l.points).toEqual(pts);
   });
 });

@@ -2652,10 +2652,11 @@ setStatus('Ready — double-click to add block | select text to create link | ri
 // TEST EXPORTS (Node.js / Vitest only — not used in browser)
 // ═══════════════════════════════════════════════════════
 if (typeof globalThis !== 'undefined' && typeof process !== 'undefined') {
-  globalThis.__canvasApp = { S, addNode, removeNode, selectNode, addBubble, loadState,
+  globalThis.__canvasApp = { S, addNode, removeNode, selectNode, addBubble, addFrame, loadState,
     saveState, restoreFromStorage,
     createLink, removeLink,
     copyNodes, cutNodes, pasteNodes, toggleMultiSel,
     addFreeLine, removeFreeLine,
-    pushUndo, undo };
+    pushUndo, undo,
+    s2c, zoom };
 }

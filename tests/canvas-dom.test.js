@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
 import '../canvas.js';
-const { S, addNode, removeNode, selectNode, addBubble, loadState } = globalThis.__canvasApp;
+const {
+  S, addNode, removeNode, selectNode, addBubble, addFrame, loadState,
+  saveState, restoreFromStorage,
+  createLink, toggleMultiSel,
+  addFreeLine, removeFreeLine,
+  pushUndo, undo,
+  s2c, zoom,
+} = globalThis.__canvasApp;
 
 // Reset canvas state and DOM before each test
 function resetState() {
@@ -206,5 +213,222 @@ describe('loadState', () => {
       lid: 1,
     });
     expect(S.nodes[0].showTail).toBe(false);
+  });
+});
+
+// ─── toggleMultiSel ────────────────────────────────────
+describe('toggleMultiSel', () => {
+  it('adds the node id to S.multiSel', () => {
+    const n = addNode(0, 0);
+    toggleMultiSel(n.id);
+    expect(S.multiSel.has(n.id)).toBe(true);
+  });
+
+  it('removes the node id when toggled a second time', () => {
+    const n = addNode(0, 0);
+    toggleMultiSel(n.id);
+    toggleMultiSel(n.id);
+    expect(S.multiSel.has(n.id)).toBe(false);
+  });
+
+  it('applies "multi-selected" CSS class when toggled on', () => {
+    const n = addNode(0, 0);
+    toggleMultiSel(n.id);
+    expect(document.getElementById('nd-' + n.id).classList.contains('multi-selected')).toBe(true);
+  });
+
+  it('removes "multi-selected" CSS class when toggled off', () => {
+    const n = addNode(0, 0);
+    toggleMultiSel(n.id);
+    toggleMultiSel(n.id);
+    expect(document.getElementById('nd-' + n.id).classList.contains('multi-selected')).toBe(false);
+  });
+
+  it('can multi-select multiple nodes independently', () => {
+    const a = addNode(0, 0);
+    const b = addNode(10, 10);
+    toggleMultiSel(a.id);
+    toggleMultiSel(b.id);
+    expect(S.multiSel.has(a.id)).toBe(true);
+    expect(S.multiSel.has(b.id)).toBe(true);
+  });
+});
+
+// ─── pushUndo / undo ───────────────────────────────────
+describe('pushUndo / undo', () => {
+  beforeEach(() => {
+    // loadState (called by the outer beforeEach) does not clear undoStack
+    S.undoStack = [];
+  });
+
+  it('pushUndo adds a snapshot to the undo stack', () => {
+    expect(S.undoStack).toHaveLength(0);
+    pushUndo();
+    expect(S.undoStack).toHaveLength(1);
+  });
+
+  it('undo rolls back the most recent node addition', () => {
+    // addNode internally calls pushUndo before adding the node
+    addNode(0, 0, '// hello');
+    expect(S.nodes).toHaveLength(1);
+    undo();
+    expect(S.nodes).toHaveLength(0);
+  });
+
+  it('undo rolls back one step at a time', () => {
+    addNode(0, 0, '// first');
+    addNode(100, 0, '// second');
+    expect(S.nodes).toHaveLength(2);
+    undo();
+    expect(S.nodes).toHaveLength(1);
+    expect(S.nodes[0].code).toBe('// first');
+  });
+
+  it('undo does not throw when the stack is empty', () => {
+    expect(S.undoStack).toHaveLength(0);
+    expect(() => undo()).not.toThrow();
+    expect(S.nodes).toHaveLength(0);
+  });
+
+  it('undo stack is capped at 10 entries', () => {
+    for (let i = 0; i < 12; i++) pushUndo();
+    expect(S.undoStack).toHaveLength(10);
+  });
+
+  it('undo restores links along with nodes', () => {
+    const a = addNode(0, 0);
+    const b = addNode(500, 0);
+    createLink(a.id, 'fn', b.id); // internally calls pushUndo before adding link
+    expect(S.links).toHaveLength(1);
+    undo(); // restores snapshot taken before the link was added
+    expect(S.links).toHaveLength(0);
+    expect(S.nodes).toHaveLength(2);
+  });
+});
+
+// ─── addFreeLine / removeFreeLine ──────────────────────
+describe('addFreeLine / removeFreeLine', () => {
+  beforeEach(() => {
+    S.freeLines = [];
+    S.flid = 1;
+    S.undoStack = [];
+  });
+
+  it('addFreeLine adds an entry to S.freeLines', () => {
+    addFreeLine([{ x: 0, y: 0 }, { x: 100, y: 100 }]);
+    expect(S.freeLines).toHaveLength(1);
+  });
+
+  it('addFreeLine stores the provided points', () => {
+    const pts = [{ x: 10, y: 20 }, { x: 30, y: 40 }];
+    addFreeLine(pts);
+    expect(S.freeLines[0].points).toEqual(pts);
+  });
+
+  it('addFreeLine assigns unique ids to each line', () => {
+    addFreeLine([{ x: 0, y: 0 }, { x: 1, y: 1 }]);
+    addFreeLine([{ x: 2, y: 2 }, { x: 3, y: 3 }]);
+    expect(S.freeLines[0].id).not.toBe(S.freeLines[1].id);
+  });
+
+  it('removeFreeLine removes the entry from S.freeLines', () => {
+    const line = addFreeLine([{ x: 0, y: 0 }, { x: 10, y: 10 }]);
+    removeFreeLine(line.id);
+    expect(S.freeLines).toHaveLength(0);
+  });
+
+  it('removeFreeLine with an unknown id does not throw', () => {
+    addFreeLine([{ x: 0, y: 0 }, { x: 10, y: 10 }]);
+    expect(() => removeFreeLine(9999)).not.toThrow();
+    expect(S.freeLines).toHaveLength(1);
+  });
+});
+
+// ─── addFrame ──────────────────────────────────────────
+describe('addFrame', () => {
+  it('adds a frame entry to S.nodes with type "frame"', () => {
+    addFrame(0, 0, 400, 300);
+    expect(S.nodes).toHaveLength(1);
+    expect(S.nodes[0].type).toBe('frame');
+  });
+
+  it('stores the correct position, dimensions, and label', () => {
+    addFrame(50, 80, 600, 400, 'My Group');
+    const n = S.nodes[0];
+    expect(n.x).toBe(50);
+    expect(n.y).toBe(80);
+    expect(n.w).toBe(600);
+    expect(n.h).toBe(400);
+    expect(n.label).toBe('My Group');
+  });
+
+  it('renders a DOM element with the frame-node class', () => {
+    const n = addFrame(0, 0, 400, 300);
+    const el = document.getElementById('nd-' + n.id);
+    expect(el).not.toBeNull();
+    expect(el.classList.contains('frame-node')).toBe(true);
+  });
+
+  it('frame node survives a save/restore round-trip', () => {
+    addFrame(10, 20, 500, 300, 'Group A', 'red');
+    saveState();
+    loadState({ nodes: [], links: [] });
+    restoreFromStorage();
+    expect(S.nodes).toHaveLength(1);
+    const r = S.nodes[0];
+    expect(r.type).toBe('frame');
+    expect(r.label).toBe('Group A');
+    expect(r.color).toBe('red');
+    expect(document.getElementById('nd-' + r.id)).not.toBeNull();
+  });
+});
+
+// ─── Viewport math (s2c / zoom) ────────────────────────
+describe('Viewport math (s2c / zoom)', () => {
+  beforeEach(() => {
+    S.vp.x = 0;
+    S.vp.y = 0;
+    S.vp.scale = 1;
+  });
+
+  it('s2c returns identity mapping with default viewport', () => {
+    const r = s2c(100, 200);
+    expect(r.x).toBe(100);
+    expect(r.y).toBe(200);
+  });
+
+  it('s2c accounts for pan offset', () => {
+    S.vp.x = 50;
+    S.vp.y = 80;
+    const r = s2c(150, 180);
+    expect(r.x).toBe(100); // (150-50)/1
+    expect(r.y).toBe(100); // (180-80)/1
+  });
+
+  it('s2c accounts for zoom scale', () => {
+    S.vp.scale = 2;
+    const r = s2c(200, 400);
+    expect(r.x).toBe(100); // 200/2
+    expect(r.y).toBe(200); // 400/2
+  });
+
+  it('zoom doubles the scale when factor is 2', () => {
+    zoom(2, 0, 0);
+    expect(S.vp.scale).toBe(2);
+  });
+
+  it('zoom halves the scale when factor is 0.5', () => {
+    zoom(0.5, 0, 0);
+    expect(S.vp.scale).toBeCloseTo(0.5);
+  });
+
+  it('zoom clamps scale to the maximum (4x)', () => {
+    zoom(100, 0, 0);
+    expect(S.vp.scale).toBe(4);
+  });
+
+  it('zoom clamps scale to the minimum (0.08x)', () => {
+    zoom(0.001, 0, 0);
+    expect(S.vp.scale).toBeCloseTo(0.08);
   });
 });
