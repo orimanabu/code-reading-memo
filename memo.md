@@ -16474,3 +16474,235 @@ No cloud environment available. Set one up at https://claude.ai/code/onboarding?
 
 ✻ Worked for 7m 16s
 ```
+
+```
+❯ README.md, CLAUDE.mdを、現状の実装を反映して更新してください
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Let me check a few more things before editing:
+
+  Searched for 5 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Now I have everything I need. Let me update both files.
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 3 lines, removed 2 lines
+      11  | File | Description |
+      12  |------|-------------|
+      13  | `canvas.html` | Entry point. Minimal DOM: toolbar, canvas container, SVG layer, modal dialogs, status bar. Loads `canvas.css` and
+           `canvas.js` as an ES module (`<script type="module">`). |
+      14 -| `canvas.css` | All styles. Two major visual systems: code block nodes (`.node`, `.node-header`, `.node-body`) and bubble/comment
+         -nodes (`.bubble-node`, `.bubble-body`, `.bubble-tail-poly`). |
+      14 +| `canvas.css` | All styles. Three major visual systems: code block nodes (`.node`, `.node-header`, `.node-body`), bubble/comment n
+         +odes (`.bubble-node`, `.bubble-body`, `.bubble-tail-poly`), and frame nodes (`.frame-node`, `.frame-header`, `.frame-label`). |
+      15  | `canvas-utils.js` | Pure utility functions — no DOM, no state. ES module with named exports. Fully unit-testable without jsdom. |
+      16 -| `canvas.js` | Main application logic. ES module that imports from `canvas-utils.js`. Organized by sections marked with `// ═══` b
+         -anners (see below). |
+      16 +| `canvas-dialogs.js` | All modal dialog logic (Global Config, Repo sub-dialog, Group Frame, Git Fetch, codesnippetd). Initialized
+         +via `initDialogs(deps)` called from `canvas.js`. |
+      17 +| `canvas.js` | Main application logic. ES module that imports from `canvas-utils.js` and `canvas-dialogs.js`. Organized by section
+         +s marked with `// ═══` banners (see below). |
+      18  | `package.json` / `vitest.config.js` | Test tooling (Vitest). Run tests with `npm test`. |
+      19
+      20  ## Architecture
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 7 lines, removed 5 lines
+      21
+      22  **`canvas.js`** is organized by sections marked with `// ═══` banners:
+      23
+      24 -- **STATE** — Single `S` object holds all runtime state: nodes, links, viewport, selection, drag, pan, edit mode, git config, clipb
+         -oard
+      25 -- **VIEWPORT** — `applyVP()`, `s2c()`, `zoom()` manage pan/zoom with CSS transform
+      24 +- **STATE** — Single `S` object holds all runtime state: nodes, links, freeLines, viewport, selection, drag, pan, edit mode, undo s
+         +tack, globalConfig, clipboard
+      25 +- **VIEWPORT** — `applyVP()`, `s2c()`, `zoom()`, `fitAll()`, `jumpTo()` manage pan/zoom with CSS transform
+      26  - **HIGHLIGHT** — highlight.js integration, `highlight()` / `buildCodeHTML()`
+      27 -- **NODES** — `addNode()`, `addBubble()`, `renderNode()`, `renderBubble()`, `startEdit()`, `stopEdit()`, `removeNode()`
+      27 +- **NODES** — `addNode()`, `addBubble()`, `addFrame()`, `renderNode()`, `startEdit()`, `stopEdit()`, `removeNode()`
+      28  - **LINKS** — SVG bezier curves connecting nodes, `renderLinks()`, `createLink()`, `removeLink()`
+      29 +- **FREE LINES** — freehand polyline/curve/straight-line strokes, `addFreeLine()`, `removeFreeLine()`, `renderFreeLines()`
+      30 +- **UNDO** — snapshot-based undo stack (up to 10 steps), `pushUndo()`, `undo()`
+      31  - **DRAG/RESIZE** — pointer event handlers on nodes and the canvas wrapper
+      30 -- **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V, Escape, etc.)
+      31 -- **PERSISTENCE** — `saveState()` / `loadState()` via `localStorage`, export/import as JSON, Git snippet fetch via GitHub raw URLs
+      32 +- **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V/Z, Escape, etc.)
+      33 +- **PERSISTENCE** — `saveState()` / `loadState()` via `localStorage` (per-tab key), export/import as JSON, Git snippet fetch via Gi
+         +tHub raw URLs
+      34
+      35  **Pure utility functions** (in `canvas-utils.js`; imported by `canvas.js`):
+      36
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 7 lines, removed 5 lines
+      44
+      45  ## Key patterns
+      46
+      47 -- **Node data model**: Each node in `S.nodes[]` is a plain object with `{ id, x, y, w, h, code, lang, title, filePath, showLineNumb
+         -ers, lineNumberStart }`. Bubble nodes have `{ id, type: 'bubble', x, y, w, h, text, tailX, tailY }`.
+      48 -- **Rendering**: `renderNode(n)` / `renderBubbleContent(n)` create DOM elements and attach event listeners each time a node is adde
+         -d. Nodes are never re-rendered in-place; the element is replaced on `stopEdit()`.
+      47 +- **Node data model**: Each node in `S.nodes[]` is a plain object. Code nodes: `{ id, x, y, w, h, code, lang, title, filePath, show
+         +LineNumbers, lineNumberStart, color }`. Bubble nodes: `{ id, type: 'bubble', x, y, w, h, text, tailX, tailY, color, showTail }`. Fr
+         +ame nodes: `{ id, type: 'frame', x, y, w, h, label, color }`.
+      48 +- **Rendering**: `renderNode(n)` dispatches to `renderFrameContent()`, `renderBubbleContent()`, or the code-block view/edit HTML ge
+         +nerators. Nodes are never re-rendered in-place; `stopEdit()` re-renders the whole element.
+      49  - **Edit mode**: `startEdit(id)` swaps the highlighted `<pre>` for a `<textarea>`; `stopEdit()` reads the textarea and re-renders.
+      50 -- **Links**: Created via text selection → tooltip click flow. Stored as `{ id, fromId, toId, text }` in `S.links[]`; rendered as SV
+         -G paths on every viewport change.
+      51 -- **Persistence**: Auto-saved to `localStorage` key `code-canvas-v1` on every change. Import/export uses JSON with the same schema
+         -as `S.nodes` + `S.links`.
+      52 -- **Git integration**: Fetches raw file content from GitHub (`raw.githubusercontent.com`) to populate code blocks. Commit hash auto
+         --resolved via GitHub API (`api.github.com`).
+      50 +- **Links**: Created via text selection → tooltip click flow. Stored as `{ id, fromId, toId, text, stroke, strokeWidth, dash }` in
+         +`S.links[]`; rendered as SVG paths on every viewport change.
+      51 +- **Free lines**: Stored as `{ id, points, lineStyle, stroke, strokeWidth, dash }` in `S.freeLines[]`. Rendered into a `<g id="free
+         +-lines-layer">` inside `#svg-links`. `lineStyle` is `'polyline'`, `'curve'`, or `'straight'`.
+      52 +- **Undo**: `pushUndo()` snapshots `S.nodes`, `S.links`, `S.freeLines` (shallow copy), capped at 10. `undo()` pops the top snapshot
+         +, clears DOM, and re-renders all nodes and lines.
+      53 +- **Persistence**: Auto-saved to a per-tab `localStorage` key `code-canvas-v1-{TAB_ID}` on every change (stale entries from closed
+         +tabs purged after 30 days). Import/export uses JSON with the full state schema.
+      54 +- **Git integration**: Fetches raw file content from GitHub (`raw.githubusercontent.com`) to populate code blocks. Commit hash auto
+         +-resolved via GitHub API (`api.github.com`). Multiple repos configurable via `S.globalConfig.repositories[]`.
+      55
+      56  ## Node types
+      57
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 4 lines, removed 3 lines
+      57
+      58  | Type | Created by | Key fields |
+      59  |------|-----------|------------|
+      60 -| `code` (default) | "+ Add Block" button or canvas double-click | `code`, `lang`, `title`, `filePath`, `showLineNumbers`, `lineNum
+         -berStart` |
+      61 -| `bubble` | "💬 Bubble" button | `text`, `tailX`, `tailY` |
+      60 +| `code` (default) | "+ Add Block" button or canvas double-click | `code`, `lang`, `title`, `filePath`, `showLineNumbers`, `lineNum
+         +berStart`, `color` |
+      61 +| `bubble` | "💬 Bubble" button | `text`, `tailX`, `tailY`, `color`, `showTail` |
+      62 +| `frame` | "⬜ Group" button | `label`, `color` |
+      63
+      64  ## Keyboard shortcuts
+      65
+      65 -`v` = select mode, `h` = hand/pan mode, `Space` (held) = temporary hand mode, `Del`/`Backspace` = delete selected, `Cmd/Ctrl+C/X/V`
+         - = copy/cut/paste nodes, `Escape` = exit edit/link mode, `l` = toggle link mode.
+      66 +`v` = select mode, `h` = hand/pan mode, `Space` (held) = temporary hand mode, `Del`/`Backspace` = delete selected, `Cmd/Ctrl+C/X/V`
+         + = copy/cut/paste nodes, `Cmd/Ctrl+Z` = undo, `Escape` = exit edit/link mode, `l` = toggle link mode.
+      67
+      68  ## Code Language Requirements
+      69
+
+⏺ Now update README.md — fix dataVersion, replace the gitConfig field/section with globalConfig, and update the sample JSON:
+
+⏺ Update(README.md)
+  ⎿  Added 2 lines, removed 2 lines
+      66
+      67  | Field | Type | Description |
+      68  |---|---|---|
+      69 -| `dataVersion` | string | Format version (currently `"1.0"`) |
+      69 +| `dataVersion` | string | Format version (currently `"3.0"`) |
+      70  | `canvasTitle` | string | Title of the entire canvas |
+      71  | `nodes` | Node[] | Array of code blocks, bubbles, and frames |
+      72  | `links` | Link[] | Array of links |
+     ...
+      75  | `lid` | number | Counter for the next link ID to assign |
+      76  | `flid` | number | Counter for the next free-line ID to assign |
+      77  | `vp` | Viewport | Viewport state |
+      78 -| `gitConfig` | GitConfig | Git repository settings associated with the canvas |
+      78 +| `globalConfig` | GlobalConfig | Canvas description and list of associated Git repositories |
+      79
+      80  ## Node object (code block)
+      81
+
+⏺ Update(README.md)
+  ⎿  Added 12 lines, removed 3 lines
+      162  | `y` | number | Y offset of the viewport |
+      163  | `scale` | number | Zoom level |
+      164
+      165 -## GitConfig object
+      165 +## GlobalConfig object
+      166
+      167 -Git repository information associated with the entire canvas. Configured via the "⎇ Git Config" button in the toolbar.
+      168 -When a GitHub URL is provided, the commit hash is auto-resolved from the branch or tag name via the GitHub API.
+      167 +Canvas-level metadata and a list of associated Git repositories. Configured via the "⚙ Config" button in the toolbar.
+      168
+      169  | Field | Type | Description |
+      170  |---|---|---|
+      171 +| `description` | string | Free-text description of the canvas |
+      172 +| `repositories` | Repository[] | List of associated Git repositories |
+      173 +
+      174 +### Repository object
+      175 +
+      176 +Each entry in `globalConfig.repositories` describes one Git repository. When a GitHub URL is provided, the commit hash is auto-res
+          +olved from the branch or tag name via the GitHub API.
+      177 +
+      178 +| Field | Type | Description |
+      179 +|---|---|---|
+      180 +| `nickname` | string | Short display name for the repository (e.g. `"crun"`) |
+      181  | `url` | string | Repository URL (e.g. `"https://github.com/owner/repo"`) |
+      182  | `branch` | string | Branch name (e.g. `"main"`). When set, uses the HEAD commit of that branch. |
+      183  | `tag` | string | Tag name (e.g. `"v1.0.0"`). When set, uses the commit of that tag. |
+
+⏺ Now update the sample JSON:
+
+⏺ Update(README.md)
+  ⎿  Added 12 lines, removed 6 lines
+      189
+      190  ```json
+      191  {
+      192 -  "dataVersion": "1.0",
+      192 +  "dataVersion": "3.0",
+      193    "canvasTitle": "crun_code_reading",
+      194    "nodes": [
+      195      {
+     ...
+      259      "y": -6.8,
+      260      "scale": 0.7
+      261    },
+      262 -  "gitConfig": {
+      263 -    "url": "https://github.com/containers/crun",
+      264 -    "branch": "main",
+      265 -    "tag": "",
+      266 -    "commitHash": "a1b2c3d4e5f6..."
+      262 +  "globalConfig": {
+      263 +    "description": "Reading the OCI runtime implementation",
+      264 +    "repositories": [
+      265 +      {
+      266 +        "nickname": "crun",
+      267 +        "url": "https://github.com/containers/crun",
+      268 +        "branch": "main",
+      269 +        "tag": "",
+      270 +        "commitHash": "a1b2c3d4e5f6..."
+      271 +      }
+      272 +    ]
+      273    }
+      274  }
+      275  ```
+
+⏺ Let me do a final review of both files to make sure they look correct:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ CLAUDE.md looks good. Let me also do a quick check on README.md to confirm the key areas:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Both files look correct. Here's a summary of what was updated:
+
+  CLAUDE.md:
+  - File structure: Added canvas-dialogs.js row; updated canvas.css description to include frame node styles
+  - Architecture: Updated STATE bullet to include freeLines, undoStack, globalConfig; added addFrame(), fitAll(), jumpTo() to VIEWPORT/NODES; added
+  FREE LINES and UNDO sections; updated KEYBOARD and PERSISTENCE bullets
+  - Key patterns: Updated node data model to include all 3 types with full field lists; updated Links to include style fields; added Free lines and
+  Undo patterns; fixed persistence key to code-canvas-v1-{TAB_ID}; updated Git integration to mention multi-repo
+  - Node types table: Added frame row; added missing fields (color, showTail) to existing rows
+  - Keyboard shortcuts: Added Cmd/Ctrl+Z = undo
+
+  README.md:
+  - dataVersion: "1.0" → "3.0"
+  - Top-level table: gitConfig → globalConfig with updated description
+  - Replaced "GitConfig object" section with "GlobalConfig object" + nested "Repository object" (now has nickname field and supports multiple repos)
+  - Sample JSON: updated dataVersion, replaced gitConfig with globalConfig.repositories[]
+
+✻ Crunched for 2m 20s
+```

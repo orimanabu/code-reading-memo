@@ -11,23 +11,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | File | Description |
 |------|-------------|
 | `canvas.html` | Entry point. Minimal DOM: toolbar, canvas container, SVG layer, modal dialogs, status bar. Loads `canvas.css` and `canvas.js` as an ES module (`<script type="module">`). |
-| `canvas.css` | All styles. Two major visual systems: code block nodes (`.node`, `.node-header`, `.node-body`) and bubble/comment nodes (`.bubble-node`, `.bubble-body`, `.bubble-tail-poly`). |
+| `canvas.css` | All styles. Three major visual systems: code block nodes (`.node`, `.node-header`, `.node-body`), bubble/comment nodes (`.bubble-node`, `.bubble-body`, `.bubble-tail-poly`), and frame nodes (`.frame-node`, `.frame-header`, `.frame-label`). |
 | `canvas-utils.js` | Pure utility functions — no DOM, no state. ES module with named exports. Fully unit-testable without jsdom. |
-| `canvas.js` | Main application logic. ES module that imports from `canvas-utils.js`. Organized by sections marked with `// ═══` banners (see below). |
+| `canvas-dialogs.js` | All modal dialog logic (Global Config, Repo sub-dialog, Group Frame, Git Fetch, codesnippetd). Initialized via `initDialogs(deps)` called from `canvas.js`. |
+| `canvas.js` | Main application logic. ES module that imports from `canvas-utils.js` and `canvas-dialogs.js`. Organized by sections marked with `// ═══` banners (see below). |
 | `package.json` / `vitest.config.js` | Test tooling (Vitest). Run tests with `npm test`. |
 
 ## Architecture
 
 **`canvas.js`** is organized by sections marked with `// ═══` banners:
 
-- **STATE** — Single `S` object holds all runtime state: nodes, links, viewport, selection, drag, pan, edit mode, git config, clipboard
-- **VIEWPORT** — `applyVP()`, `s2c()`, `zoom()` manage pan/zoom with CSS transform
+- **STATE** — Single `S` object holds all runtime state: nodes, links, freeLines, viewport, selection, drag, pan, edit mode, undo stack, globalConfig, clipboard
+- **VIEWPORT** — `applyVP()`, `s2c()`, `zoom()`, `fitAll()`, `jumpTo()` manage pan/zoom with CSS transform
 - **HIGHLIGHT** — highlight.js integration, `highlight()` / `buildCodeHTML()`
-- **NODES** — `addNode()`, `addBubble()`, `renderNode()`, `renderBubble()`, `startEdit()`, `stopEdit()`, `removeNode()`
+- **NODES** — `addNode()`, `addBubble()`, `addFrame()`, `renderNode()`, `startEdit()`, `stopEdit()`, `removeNode()`
 - **LINKS** — SVG bezier curves connecting nodes, `renderLinks()`, `createLink()`, `removeLink()`
+- **FREE LINES** — freehand polyline/curve/straight-line strokes, `addFreeLine()`, `removeFreeLine()`, `renderFreeLines()`
+- **UNDO** — snapshot-based undo stack (up to 10 steps), `pushUndo()`, `undo()`
 - **DRAG/RESIZE** — pointer event handlers on nodes and the canvas wrapper
-- **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V, Escape, etc.)
-- **PERSISTENCE** — `saveState()` / `loadState()` via `localStorage`, export/import as JSON, Git snippet fetch via GitHub raw URLs
+- **KEYBOARD** — global `keydown` handler for shortcuts (v/h mode, Del, Cmd+C/X/V/Z, Escape, etc.)
+- **PERSISTENCE** — `saveState()` / `loadState()` via `localStorage` (per-tab key), export/import as JSON, Git snippet fetch via GitHub raw URLs
 
 **Pure utility functions** (in `canvas-utils.js`; imported by `canvas.js`):
 
@@ -41,23 +44,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Key patterns
 
-- **Node data model**: Each node in `S.nodes[]` is a plain object with `{ id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart }`. Bubble nodes have `{ id, type: 'bubble', x, y, w, h, text, tailX, tailY }`.
-- **Rendering**: `renderNode(n)` / `renderBubbleContent(n)` create DOM elements and attach event listeners each time a node is added. Nodes are never re-rendered in-place; the element is replaced on `stopEdit()`.
+- **Node data model**: Each node in `S.nodes[]` is a plain object. Code nodes: `{ id, x, y, w, h, code, lang, title, filePath, showLineNumbers, lineNumberStart, color }`. Bubble nodes: `{ id, type: 'bubble', x, y, w, h, text, tailX, tailY, color, showTail }`. Frame nodes: `{ id, type: 'frame', x, y, w, h, label, color }`.
+- **Rendering**: `renderNode(n)` dispatches to `renderFrameContent()`, `renderBubbleContent()`, or the code-block view/edit HTML generators. Nodes are never re-rendered in-place; `stopEdit()` re-renders the whole element.
 - **Edit mode**: `startEdit(id)` swaps the highlighted `<pre>` for a `<textarea>`; `stopEdit()` reads the textarea and re-renders.
-- **Links**: Created via text selection → tooltip click flow. Stored as `{ id, fromId, toId, text }` in `S.links[]`; rendered as SVG paths on every viewport change.
-- **Persistence**: Auto-saved to `localStorage` key `code-canvas-v1` on every change. Import/export uses JSON with the same schema as `S.nodes` + `S.links`.
-- **Git integration**: Fetches raw file content from GitHub (`raw.githubusercontent.com`) to populate code blocks. Commit hash auto-resolved via GitHub API (`api.github.com`).
+- **Links**: Created via text selection → tooltip click flow. Stored as `{ id, fromId, toId, text, stroke, strokeWidth, dash }` in `S.links[]`; rendered as SVG paths on every viewport change.
+- **Free lines**: Stored as `{ id, points, lineStyle, stroke, strokeWidth, dash }` in `S.freeLines[]`. Rendered into a `<g id="free-lines-layer">` inside `#svg-links`. `lineStyle` is `'polyline'`, `'curve'`, or `'straight'`.
+- **Undo**: `pushUndo()` snapshots `S.nodes`, `S.links`, `S.freeLines` (shallow copy), capped at 10. `undo()` pops the top snapshot, clears DOM, and re-renders all nodes and lines.
+- **Persistence**: Auto-saved to a per-tab `localStorage` key `code-canvas-v1-{TAB_ID}` on every change (stale entries from closed tabs purged after 30 days). Import/export uses JSON with the full state schema.
+- **Git integration**: Fetches raw file content from GitHub (`raw.githubusercontent.com`) to populate code blocks. Commit hash auto-resolved via GitHub API (`api.github.com`). Multiple repos configurable via `S.globalConfig.repositories[]`.
 
 ## Node types
 
 | Type | Created by | Key fields |
 |------|-----------|------------|
-| `code` (default) | "+ Add Block" button or canvas double-click | `code`, `lang`, `title`, `filePath`, `showLineNumbers`, `lineNumberStart` |
-| `bubble` | "💬 Bubble" button | `text`, `tailX`, `tailY` |
+| `code` (default) | "+ Add Block" button or canvas double-click | `code`, `lang`, `title`, `filePath`, `showLineNumbers`, `lineNumberStart`, `color` |
+| `bubble` | "💬 Bubble" button | `text`, `tailX`, `tailY`, `color`, `showTail` |
+| `frame` | "⬜ Group" button | `label`, `color` |
 
 ## Keyboard shortcuts
 
-`v` = select mode, `h` = hand/pan mode, `Space` (held) = temporary hand mode, `Del`/`Backspace` = delete selected, `Cmd/Ctrl+C/X/V` = copy/cut/paste nodes, `Escape` = exit edit/link mode, `l` = toggle link mode.
+`v` = select mode, `h` = hand/pan mode, `Space` (held) = temporary hand mode, `Del`/`Backspace` = delete selected, `Cmd/Ctrl+C/X/V` = copy/cut/paste nodes, `Cmd/Ctrl+Z` = undo, `Escape` = exit edit/link mode, `l` = toggle link mode.
 
 ## Code Language Requirements
 

@@ -66,7 +66,7 @@ When a JSON file is specified, its contents are loaded into the canvas on startu
 
 | Field | Type | Description |
 |---|---|---|
-| `dataVersion` | string | Format version (currently `"1.0"`) |
+| `dataVersion` | string | Format version (currently `"3.0"`) |
 | `canvasTitle` | string | Title of the entire canvas |
 | `nodes` | Node[] | Array of code blocks, bubbles, and frames |
 | `links` | Link[] | Array of links |
@@ -75,7 +75,7 @@ When a JSON file is specified, its contents are loaded into the canvas on startu
 | `lid` | number | Counter for the next link ID to assign |
 | `flid` | number | Counter for the next free-line ID to assign |
 | `vp` | Viewport | Viewport state |
-| `gitConfig` | GitConfig | Git repository settings associated with the canvas |
+| `globalConfig` | GlobalConfig | Canvas description and list of associated Git repositories |
 
 ## Node object (code block)
 
@@ -162,13 +162,22 @@ Freehand line drawn directly on the canvas.
 | `y` | number | Y offset of the viewport |
 | `scale` | number | Zoom level |
 
-## GitConfig object
+## GlobalConfig object
 
-Git repository information associated with the entire canvas. Configured via the "⎇ Git Config" button in the toolbar.
-When a GitHub URL is provided, the commit hash is auto-resolved from the branch or tag name via the GitHub API.
+Canvas-level metadata and a list of associated Git repositories. Configured via the "⚙ Config" button in the toolbar.
 
 | Field | Type | Description |
 |---|---|---|
+| `description` | string | Free-text description of the canvas |
+| `repositories` | Repository[] | List of associated Git repositories |
+
+### Repository object
+
+Each entry in `globalConfig.repositories` describes one Git repository. When a GitHub URL is provided, the commit hash is auto-resolved from the branch or tag name via the GitHub API.
+
+| Field | Type | Description |
+|---|---|---|
+| `nickname` | string | Short display name for the repository (e.g. `"crun"`) |
 | `url` | string | Repository URL (e.g. `"https://github.com/owner/repo"`) |
 | `branch` | string | Branch name (e.g. `"main"`). When set, uses the HEAD commit of that branch. |
 | `tag` | string | Tag name (e.g. `"v1.0.0"`). When set, uses the commit of that tag. |
@@ -180,7 +189,7 @@ Specify either `branch` or `tag`, but not both. If both are omitted, `commitHash
 
 ```json
 {
-  "dataVersion": "1.0",
+  "dataVersion": "3.0",
   "canvasTitle": "crun_code_reading",
   "nodes": [
     {
@@ -250,11 +259,17 @@ Specify either `branch` or `tag`, but not both. If both are omitted, `commitHash
     "y": -6.8,
     "scale": 0.7
   },
-  "gitConfig": {
-    "url": "https://github.com/containers/crun",
-    "branch": "main",
-    "tag": "",
-    "commitHash": "a1b2c3d4e5f6..."
+  "globalConfig": {
+    "description": "Reading the OCI runtime implementation",
+    "repositories": [
+      {
+        "nickname": "crun",
+        "url": "https://github.com/containers/crun",
+        "branch": "main",
+        "tag": "",
+        "commitHash": "a1b2c3d4e5f6..."
+      }
+    ]
   }
 }
 ```
